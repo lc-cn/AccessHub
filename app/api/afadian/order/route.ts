@@ -1,23 +1,89 @@
+import { randomBytes, randomUUID, timingSafeEqual } from 'crypto'
+import { eq, sql } from 'drizzle-orm'
 import { NextResponse } from 'next/server'
-import { createHash, randomUUID } from 'crypto'
 import { db } from '@/lib/db'
-import { afadianOrders, redeemCodes, groups } from '@/lib/db/schema'
-import { eq } from 'drizzle-orm'
+import { afadianBenefitRules, afadianOrders, groups, redeemCodes } from '@/lib/db/schema'
+import { resolveAfdianBenefit } from '@/lib/afadian-benefits'
+import { legacyDurationDays, type EntitlementUnit, type RedeemKind } from '@/lib/entitlements'
 
-function sign(payload: string) { return createHash('md5').update(`${process.env.AFDIAN_USER_ID}${process.env.AFDIAN_ADMIN_TOKEN}${payload}`).digest('hex') }
+function response(ec: number, em: string, data?: Record<string, unknown>, status = 200) {
+  return NextResponse.json({ ec, em, ...(data ? { data } : {}) }, { status })
+}
+
+function safeEqual(actual: string, expected: string) {
+  const actualBuffer = Buffer.from(actual)
+  const expectedBuffer = Buffer.from(expected)
+  return actualBuffer.length === expectedBuffer.length && timingSafeEqual(actualBuffer, expectedBuffer)
+}
+
+function requestSecret(request: Request) {
+  const authorization = request.headers.get('authorization')
+  if (authorization?.startsWith('Bearer ')) return authorization.slice(7)
+  return request.headers.get('x-webhook-secret') || new URL(request.url).searchParams.get('token') || ''
+}
+
 export async function POST(request: Request) {
+  const expectedSecret = process.env.AFDIAN_WEBHOOK_SECRET
+  if (!expectedSecret) return response(503, 'webhook secret is not configured', undefined, 503)
+  if (!safeEqual(requestSecret(request), expectedSecret)) return response(401, 'invalid webhook secret', undefined, 401)
+
   const raw = await request.text()
-  const signature = request.headers.get('x-afdian-signature') || request.headers.get('x-signature')
-  const expected = sign(raw)
-  if (!signature || signature !== expected) return NextResponse.json({ error: 'invalid signature' }, { status: 401 })
-  const data = JSON.parse(raw)
-  const order = data?.data?.order || data?.order || data?.data
-  const outTradeNo = String(order?.out_trade_no || order?.outTradeNo || '')
-  if (!outTradeNo) return NextResponse.json({ error: 'missing order' }, { status: 400 })
-  const exists = await db.select({ id: afadianOrders.id }).from(afadianOrders).where(eq(afadianOrders.outTradeNo, outTradeNo)).limit(1)
-  if (exists.length) return NextResponse.json({ ok: true })
-  const [defaultGroup] = await db.select({ id: groups.id }).from(groups).where(eq(groups.isDefault, true)).limit(1)
-  if (defaultGroup) await db.insert(redeemCodes).values({ id: randomUUID(), code: `AFD-${randomUUID().slice(0, 8).toUpperCase()}`, groupId: defaultGroup.id, durationDays: 30 })
-  await db.insert(afadianOrders).values({ id: randomUUID(), outTradeNo, payload: raw })
-  return NextResponse.json({ ok: true })
+  let payload: { data?: { type?: string; order?: Record<string, unknown> } }
+  try { payload = JSON.parse(raw || '{}') as typeof payload } catch { return response(400, 'invalid json') }
+  const order = payload.data?.order
+  const outTradeNo = String(order?.out_trade_no || '')
+  if (payload.data?.type !== 'order' || !outTradeNo) return response(400, 'missing order')
+  if (Number(order?.status) !== 2) return response(200, 'ignored unpaid order')
+
+  const planId = String(order?.plan_id || '')
+  const skuDetails = Array.isArray(order?.sku_detail) ? order.sku_detail as Array<Record<string, unknown>> : []
+  const skuIds = skuDetails.map((item) => String(item.sku_id || '')).filter(Boolean)
+  const storedRules = await db.select().from(afadianBenefitRules).where(eq(afadianBenefitRules.enabled, true))
+  const resolved = resolveAfdianBenefit(storedRules.map((rule) => ({
+    benefitKey: rule.benefitKey,
+    enabled: rule.enabled,
+    kind: rule.kind as RedeemKind,
+    groupId: rule.groupId ?? undefined,
+    credits: rule.credits ?? undefined,
+    durationValue: rule.durationValue,
+    durationUnit: rule.durationUnit as EntitlementUnit,
+    codesPerItem: rule.codesPerItem,
+  })), planId, skuIds)
+  if (!resolved) return response(422, 'no valid entitlement mapping for this plan or sku')
+
+  const itemCount = skuDetails.length ? skuDetails.reduce((total, item) => total + Math.max(0, Number(item.count) || 0), 0) : 1
+  const codeCount = Math.max(1, itemCount) * resolved.benefit.codesPerItem
+  if (codeCount > 1000) return response(422, 'order would generate more than 1000 codes')
+
+  try {
+    const result = await db.transaction(async (tx) => {
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${outTradeNo}))`)
+      const [existing] = await tx.select({ generatedCodes: afadianOrders.generatedCodes }).from(afadianOrders).where(eq(afadianOrders.outTradeNo, outTradeNo)).limit(1)
+      if (existing) return { duplicate: true, codes: JSON.parse(existing.generatedCodes) as string[] }
+
+      if (resolved.benefit.kind === 'group') {
+        const [group] = await tx.select({ id: groups.id }).from(groups).where(eq(groups.id, resolved.benefit.groupId!)).limit(1)
+        if (!group) throw new Error('mapped user group does not exist')
+      }
+
+      const values = Array.from({ length: codeCount }, () => ({
+        id: randomUUID(),
+        code: `AFD-${randomBytes(4).toString('hex').toUpperCase()}-${randomBytes(4).toString('hex').toUpperCase()}`,
+        kind: resolved.benefit.kind,
+        groupId: resolved.benefit.kind === 'group' ? resolved.benefit.groupId! : null,
+        credits: resolved.benefit.kind === 'credits' ? resolved.benefit.credits! : null,
+        durationDays: legacyDurationDays(resolved.benefit.durationValue, resolved.benefit.durationUnit),
+        durationValue: resolved.benefit.durationValue,
+        durationUnit: resolved.benefit.durationUnit,
+      }))
+      await tx.insert(redeemCodes).values(values)
+      const codes = values.map((item) => item.code)
+      await tx.insert(afadianOrders).values({ id: randomUUID(), outTradeNo, userId: String(order?.user_id || '') || null, benefitKey: resolved.key, generatedCodes: JSON.stringify(codes), payload: raw })
+      return { duplicate: false, codes }
+    })
+    return response(200, 'ok', { duplicate: result.duplicate, codes: result.codes })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'fulfillment failed'
+    return response(500, message)
+  }
 }

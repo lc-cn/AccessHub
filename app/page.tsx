@@ -1,20 +1,22 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { BookOpen, LayoutDashboard, LogOut, RefreshCw, Ticket, Users, Zap } from 'lucide-react'
+import { BookOpen, HeartHandshake, LayoutDashboard, LogOut, RefreshCw, Ticket, Users, Zap } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { ApiDocs } from '@/components/access-hub/api-docs'
+import { AfdianMappings } from '@/components/access-hub/afadian-mappings'
 import { GroupManagement } from '@/components/access-hub/group-management'
 import { Overview } from '@/components/access-hub/overview'
 import { RedeemCodes } from '@/components/access-hub/redeem-codes'
 import type { DashboardData } from '@/components/access-hub/types'
 import { authClient } from '@/lib/auth-client'
 
-type View = '概览' | '兑换码' | '用户组' | 'API 文档'
+type View = '概览' | '兑换码' | '用户组' | '爱发电' | 'API 文档'
 const viewMeta: Record<View, { eyebrow: string; description: string }> = {
   '概览': { eyebrow: '工作台', description: '查看账户、访问权益与今天的 API 使用情况。' },
   '兑换码': { eyebrow: '权益中心', description: '核销兑换码；管理员可以在这里生成并追踪兑换码。' },
   '用户组': { eyebrow: '管理员', description: '配置用户组的频率、每日配额和默认策略。' },
+  '爱发电': { eyebrow: '管理员', description: '维护爱发电方案与用户组或 credits 权益之间的自动发码规则。' },
   'API 文档': { eyebrow: '开发者', description: '查看当前可用接口及接入方式。' },
 }
 
@@ -62,7 +64,7 @@ export default function Page() {
   const user = dashboard?.user ?? null
   const isAuthenticated = dashboard?.authenticated === true
   const isAdmin = user?.role === 'admin'
-  const views: View[] = isAdmin ? ['概览', '兑换码', '用户组', 'API 文档'] : ['概览', '兑换码', 'API 文档']
+  const views: View[] = isAdmin ? ['概览', '兑换码', '用户组', '爱发电', 'API 文档'] : ['概览', '兑换码', 'API 文档']
 
   return <div className="min-h-screen bg-[#f3f6fb] text-[#172033]">
     <aside className="fixed inset-y-0 left-0 z-20 hidden w-64 border-r border-[#e3e9f3] bg-white px-5 py-6 lg:flex lg:flex-col">
@@ -81,6 +83,7 @@ export default function Page() {
         {active === '概览' && <Overview dashboard={dashboard} loading={loading} copied={copied} onCopyId={() => void copyId()} onNavigate={setActive}/>}
         {active === '兑换码' && <RedeemCodes authenticated={isAuthenticated} isAdmin={isAdmin} groups={dashboard?.groups ?? []} onChanged={loadDashboard} onSignIn={signIn}/>}
         {active === '用户组' && isAdmin && <GroupManagement groups={dashboard?.groups ?? []} onChanged={loadDashboard}/>}
+        {active === '爱发电' && isAdmin && <AfdianMappings groups={dashboard?.groups ?? []}/>}
         {active === 'API 文档' && <ApiDocs/>}
       </div>
     </main>
@@ -92,6 +95,6 @@ function Brand() { return <div className="flex items-center gap-3 px-2"><span cl
 function Avatar({ user }: { user: DashboardData['user'] }) { return <span className="grid size-9 shrink-0 place-items-center overflow-hidden rounded-xl bg-[#e7ebf3] text-xs font-semibold text-slate-600">{user?.image ? <img src={user.image} alt={`${user.name} 的头像`} className="size-full object-cover"/> : user?.name?.slice(0, 1) || '?'}</span> }
 
 function NavButton({ view, active, onClick }: { view: View; active: boolean; onClick: () => void }) {
-  const Icon = view === '概览' ? LayoutDashboard : view === '兑换码' ? Ticket : view === '用户组' ? Users : BookOpen
+  const Icon = view === '概览' ? LayoutDashboard : view === '兑换码' ? Ticket : view === '用户组' ? Users : view === '爱发电' ? HeartHandshake : BookOpen
   return <button onClick={onClick} className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-sm transition active:translate-y-px ${active ? 'bg-[#edf2ff] font-medium text-[#3157d5]' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'}`}><Icon size={17}/>{view}</button>
 }

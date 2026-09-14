@@ -4,8 +4,9 @@ import { headers } from 'next/headers'
 import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { db } from '@/lib/db'
-import { apiUsage, groupMemberships, groups } from '@/lib/db/schema'
+import { apiUsage, creditGrants, groupMemberships, groups } from '@/lib/db/schema'
 import { retryAfterSeconds, usagePeriodKeys } from '@/lib/usage-periods'
+import { isUnlimited } from '@/lib/entitlements'
 
 type Period = 'minute' | 'day' | 'week' | 'month'
 
@@ -32,7 +33,7 @@ export async function POST() {
       .from(groupMemberships)
       .innerJoin(groups, eq(groups.id, groupMemberships.groupId))
       .where(and(eq(groupMemberships.userId, session.user.id), lte(groupMemberships.startsAt, now), or(isNull(groupMemberships.expiresAt), gt(groupMemberships.expiresAt, now))))
-      .orderBy(sql`${groupMemberships.expiresAt} desc nulls first`, desc(groupMemberships.startsAt))
+      .orderBy(desc(groupMemberships.startsAt), sql`${groupMemberships.expiresAt} desc nulls first`)
       .limit(1)
     const [defaultGroup] = membership ? [] : await tx
       .select({ groupId: groups.id, groupName: groups.name, rateLimit: groups.rateLimit, dailyLimit: groups.dailyLimit, weeklyLimit: groups.weeklyLimit, monthlyLimit: groups.monthlyLimit })
@@ -59,14 +60,27 @@ export async function POST() {
       { period: 'week', used: totals?.weekly ?? 0, limit: policy.weeklyLimit },
       { period: 'month', used: totals?.monthly ?? 0, limit: policy.monthlyLimit },
     ]
-    const exceeded = checks.find((item) => item.limit != null && item.used >= item.limit)
-    if (exceeded) return NextResponse.json({
-      error: 'usage_limit_exceeded',
-      period: exceeded.period,
-      limit: exceeded.limit,
-      used: exceeded.used,
-      retryAfterSeconds: retryAfterSeconds(exceeded.period, now, todayUsage?.windowStartedAt),
-    }, { status: 429 })
+    const exceeded = checks.find((item) => !isUnlimited(item.limit) && item.used >= item.limit!)
+    let creditUsed = false
+    let creditsRemaining = 0
+    if (exceeded) {
+      const [grant] = await tx
+        .select({ id: creditGrants.id, remainingCredits: creditGrants.remainingCredits })
+        .from(creditGrants)
+        .where(and(eq(creditGrants.userId, session.user.id), gt(creditGrants.remainingCredits, 0), or(isNull(creditGrants.expiresAt), gt(creditGrants.expiresAt, now))))
+        .orderBy(sql`${creditGrants.expiresAt} asc nulls last`, creditGrants.createdAt)
+        .limit(1)
+      if (!grant) return NextResponse.json({
+        error: 'usage_limit_exceeded',
+        period: exceeded.period,
+        limit: exceeded.limit,
+        used: exceeded.used,
+        creditsRemaining: 0,
+        retryAfterSeconds: retryAfterSeconds(exceeded.period, now, todayUsage?.windowStartedAt),
+      }, { status: 429 })
+      await tx.update(creditGrants).set({ remainingCredits: grant.remainingCredits - 1 }).where(eq(creditGrants.id, grant.id))
+      creditUsed = true
+    }
 
     if (todayUsage) {
       const inCurrentWindow = todayUsage.windowStartedAt > minuteStart
@@ -79,6 +93,8 @@ export async function POST() {
       await tx.insert(apiUsage).values({ id: randomUUID(), userId: session.user.id, usageDate: today, requestCount: 1, windowCount: 1, windowStartedAt: now })
     }
 
-    return NextResponse.json({ ok: true, group: policy.groupName, usage: { minute: minuteCount + 1, daily: (totals?.daily ?? 0) + 1, weekly: (totals?.weekly ?? 0) + 1, monthly: (totals?.monthly ?? 0) + 1 } })
+    const [creditTotal] = await tx.select({ total: sql<number>`coalesce(sum(${creditGrants.remainingCredits}), 0)::int`.mapWith(Number) }).from(creditGrants).where(and(eq(creditGrants.userId, session.user.id), gt(creditGrants.remainingCredits, 0), or(isNull(creditGrants.expiresAt), gt(creditGrants.expiresAt, now))))
+    creditsRemaining = creditTotal?.total ?? 0
+    return NextResponse.json({ ok: true, group: policy.groupName, creditUsed, creditsRemaining, usage: { minute: minuteCount + 1, daily: (totals?.daily ?? 0) + 1, weekly: (totals?.weekly ?? 0) + 1, monthly: (totals?.monthly ?? 0) + 1 } })
   })
 }

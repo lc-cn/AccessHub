@@ -16,6 +16,7 @@ export type DashboardData = {
   currentGroup?: { groupId: string; groupName: string; rateLimit: number; dailyLimit: number | null; weeklyLimit: number | null; monthlyLimit: number | null; expiresAt: string | null } | null
   usage?: { daily: number; weekly: number; monthly: number }
   activeBenefits?: number
+  creditsRemaining?: number
   groups: DashboardGroup[]
 }
 
@@ -27,12 +28,31 @@ export type AdminGroup = Omit<DashboardGroup, 'memberCount'> & {
 export type RedeemCode = {
   id: string
   code: string
-  groupId: string
-  groupName: string
+  kind: 'group' | 'credits'
+  groupId: string | null
+  groupName: string | null
+  credits: number | null
   durationDays: number
+  durationValue: number
+  durationUnit: 'day' | 'month' | 'quarter' | 'year'
   expiresAt: string | null
   redeemedAt: string | null
   createdAt: string
 }
 
-export type AdminData = { groups: AdminGroup[]; codes: RedeemCode[] }
+export type AfdianRule = {
+  id: string
+  benefitKey: string
+  name: string
+  kind: 'group' | 'credits'
+  groupId: string | null
+  groupName: string | null
+  credits: number | null
+  durationValue: number
+  durationUnit: 'day' | 'month' | 'quarter' | 'year'
+  codesPerItem: number
+  enabled: boolean
+  updatedAt: string
+}
+
+export type AdminData = { groups: AdminGroup[]; codes: RedeemCode[]; afdianRules: AfdianRule[]; afadianWebhookConfigured: boolean }

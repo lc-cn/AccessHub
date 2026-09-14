@@ -24,6 +24,22 @@ Open [http://localhost:3000](http://localhost:3000) with your browser to see the
 
 The application expects `DATABASE_URL`, `BETTER_AUTH_SECRET`, `GITHUB_CLIENT_ID`, and `GITHUB_CLIENT_SECRET`. Set `NEXT_PUBLIC_AFDIAN_URL` to the creator page used by the upgrade call to action.
 
+## Entitlements
+
+User-group minute, daily, weekly, and monthly limits accept `-1` for unlimited access. Redeem codes can grant either a user group or an additive credits pack. Credits are consumed one at a time only after a base group limit is reached; grants that expire sooner are consumed first. Entitlement terms support `day`, `month`, `quarter`, and `year`, while a duration value of `-1` means permanent.
+
+## Afdian automatic fulfillment
+
+Configure Afdian's order webhook to call:
+
+```text
+https://your-domain.example/api/afadian/order?token=<AFDIAN_WEBHOOK_SECRET>
+```
+
+Set `AFDIAN_WEBHOOK_SECRET` to a long random value and redact the webhook query string from access logs. Configure plan and SKU mappings in the administrator-only **Afdian** page. Each mapping can grant a user group or credits pack, select its term, set the number of codes per purchased item, and be disabled without deletion. SKU mappings take precedence over plan mappings.
+
+The webhook accepts paid orders only, stores the generated codes with the order, and uses `out_trade_no` as its idempotency key. Generated `AFD-...` codes also appear in the administrator's redemption-code ledger. Set `NEXT_PUBLIC_AFDIAN_URL` to the public creator page shown in the upgrade action.
+
 Apply SQL files in `drizzle/` to the PostgreSQL database before deploying schema-dependent changes.
 
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
