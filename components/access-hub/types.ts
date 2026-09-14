@@ -17,6 +17,7 @@ export type DashboardData = {
   usage?: { daily: number; weekly: number; monthly: number }
   activeBenefits?: number
   creditsRemaining?: number
+  afdian?: { linked: boolean; oauthConfigured: boolean }
   groups: DashboardGroup[]
 }
 

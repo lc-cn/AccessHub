@@ -4,7 +4,8 @@ import { alias } from 'drizzle-orm/pg-core'
 import { headers } from 'next/headers'
 import { auth } from '@/lib/auth'
 import { db } from '@/lib/db'
-import { apiUsage, creditGrants, groupMemberships, groups, user } from '@/lib/db/schema'
+import { account, apiUsage, creditGrants, groupMemberships, groups, user } from '@/lib/db/schema'
+import { AFDIAN_PROVIDER_ID, isAfdianOAuthConfigured } from '@/lib/afdian-oauth'
 import { usagePeriodKeys } from '@/lib/usage-periods'
 
 export async function GET() {
@@ -57,7 +58,7 @@ export async function GET() {
     or(isNull(groupMemberships.expiresAt), gt(groupMemberships.expiresAt, now)),
   )
 
-  const [[userRow], [membership], [usage], [benefits], [creditBalance], [creditBenefits]] = await Promise.all([
+  const [[userRow], [membership], [usage], [benefits], [creditBalance], [creditBenefits], [afdianAccount]] = await Promise.all([
     db.select({ id: user.id, name: user.name, image: user.image, role: user.role, createdAt: user.createdAt }).from(user).where(eq(user.id, session.user.id)).limit(1),
     db
       .select({ groupId: groups.id, groupName: groups.name, rateLimit: groups.rateLimit, dailyLimit: groups.dailyLimit, weeklyLimit: groups.weeklyLimit, monthlyLimit: groups.monthlyLimit, expiresAt: groupMemberships.expiresAt })
@@ -74,6 +75,7 @@ export async function GET() {
     db.select({ count: count() }).from(groupMemberships).where(and(activeMembership, eq(groupMemberships.source, 'redeem'))),
     db.select({ total: sql<number>`coalesce(sum(${creditGrants.remainingCredits}), 0)::int`.mapWith(Number) }).from(creditGrants).where(and(eq(creditGrants.userId, session.user.id), gt(creditGrants.remainingCredits, 0), or(isNull(creditGrants.expiresAt), gt(creditGrants.expiresAt, now)))),
     db.select({ count: count() }).from(creditGrants).where(and(eq(creditGrants.userId, session.user.id), gt(creditGrants.remainingCredits, 0), or(isNull(creditGrants.expiresAt), gt(creditGrants.expiresAt, now)))),
+    db.select({ id: account.id }).from(account).where(and(eq(account.userId, session.user.id), eq(account.providerId, AFDIAN_PROVIDER_ID))).limit(1),
   ])
 
   const defaultGroup = groupRows.find((group) => group.isDefault) ?? null
@@ -100,6 +102,7 @@ export async function GET() {
     usage: { daily: usage?.daily ?? 0, weekly: usage?.weekly ?? 0, monthly: usage?.monthly ?? 0 },
     activeBenefits: (benefits?.count ?? 0) + (creditBenefits?.count ?? 0),
     creditsRemaining: creditBalance?.total ?? 0,
+    afdian: { linked: Boolean(afdianAccount), oauthConfigured: isAfdianOAuthConfigured() },
     groups: groupRows,
   })
 }

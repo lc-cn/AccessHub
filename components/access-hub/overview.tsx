@@ -32,8 +32,8 @@ export function Overview({ dashboard, loading, copied, onCopyId, onNavigate }: P
       </article>
 
       <article className="rounded-[22px] bg-[#182238] p-6 text-white shadow-[0_20px_55px_rgba(24,34,56,.18)] sm:p-7">
-        <p className="text-xs font-medium text-slate-400">升级权益</p><h3 className="mt-2 text-xl font-semibold tracking-tight">需要更多 API 配额？</h3><p className="mt-2 max-w-sm text-sm leading-6 text-slate-300">在爱发电获取兑换码，核销后立即切换到更高配额的用户组。</p>
-        <div className="mt-7 space-y-2"><UpgradeAction onNavigate={() => onNavigate('兑换码')}/>{user?.role === 'admin' && <QuickAction label="配置用户组策略" onClick={() => onNavigate('用户组')}/>}</div>
+        <p className="text-xs font-medium text-slate-400">升级权益</p><h3 className="mt-2 text-xl font-semibold tracking-tight">需要更多 API 配额？</h3><p className="mt-2 max-w-sm text-sm leading-6 text-slate-300">绑定爱发电后，购买成功即可自动到账；未绑定的订单仍会生成兑换码。</p>
+        <div className="mt-7 space-y-2"><UpgradeAction afdian={dashboard?.afdian} onNavigate={() => onNavigate('兑换码')}/>{user?.role === 'admin' && <QuickAction label="配置用户组策略" onClick={() => onNavigate('用户组')}/>}</div>
       </article>
     </section>
 
@@ -42,7 +42,7 @@ export function Overview({ dashboard, loading, copied, onCopyId, onNavigate }: P
     <section className="rounded-[22px] bg-white p-6 shadow-[0_18px_55px_rgba(39,55,92,.06)] sm:p-7">
       <div className="flex items-start justify-between gap-4"><div><p className="text-xs font-medium tracking-wide text-slate-400">账户身份</p><h3 className="mt-1 text-lg font-semibold">调用凭据归属</h3></div><span className="rounded-md bg-slate-100 px-2 py-1 font-mono text-[11px] text-slate-500">UID</span></div>
       <div className="mt-6 flex items-center justify-between gap-3 rounded-xl bg-[#f5f7fb] px-4 py-3.5"><code className="min-w-0 truncate text-sm text-slate-600">{user?.id || '正在读取身份 ID'}</code><button onClick={onCopyId} disabled={!user} className="flex shrink-0 items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-medium text-[#3157d5] transition hover:bg-white active:translate-y-px disabled:text-slate-300">{copied ? <Check size={14}/> : <Copy size={14}/>} {copied ? '已复制' : '复制'}</button></div>
-      <dl className="mt-7 grid grid-cols-2 gap-x-6 gap-y-5 border-t border-slate-100 pt-6 sm:grid-cols-4"><Info label="登录方式" value="GitHub OAuth"/><Info label="注册时间" value={registrationDate}/><Info label="当前组" value={group?.groupName || '—'}/><Info label="组内有效期" value={group ? expiresAt : '—'}/></dl>
+      <dl className="mt-7 grid grid-cols-2 gap-x-6 gap-y-5 border-t border-slate-100 pt-6 sm:grid-cols-5"><Info label="登录方式" value="GitHub OAuth"/><Info label="爱发电" value={dashboard?.afdian?.linked ? '已绑定 · 自动到账' : dashboard?.afdian?.oauthConfigured ? '购买时绑定' : '等待 OAuth 开通'}/><Info label="注册时间" value={registrationDate}/><Info label="当前组" value={group?.groupName || '—'}/><Info label="组内有效期" value={group ? expiresAt : '—'}/></dl>
     </section>
   </div>
 }
@@ -60,5 +60,5 @@ function Quota({ label, value }: { label: string; value: number | null }) { retu
 function quotaText(value: number | null | undefined) { return value == null || value === -1 ? '不限' : value.toLocaleString() }
 function limitLabel(limit: number | null | undefined, period: string) { return limit == null || limit === -1 ? `${period}不限额` : `${period}上限 ${limit.toLocaleString()}` }
 function Info({ label, value }: { label: string; value: string }) { return <div><dt className="text-[11px] text-slate-400">{label}</dt><dd className="mt-1 truncate text-sm font-medium text-slate-600">{value}</dd></div> }
-function UpgradeAction({ onNavigate }: { onNavigate: () => void }) { const url = process.env.NEXT_PUBLIC_AFDIAN_URL; return url ? <a href={url} target="_blank" rel="noreferrer" className="flex w-full items-center justify-between rounded-xl bg-white px-4 py-3 text-sm font-medium text-[#182238] transition hover:bg-slate-100 active:translate-y-px">前往爱发电获取兑换码<ExternalLink size={15}/></a> : <QuickAction label="前往兑换权益" onClick={onNavigate}/> }
+function UpgradeAction({ afdian, onNavigate }: { afdian?: DashboardData['afdian']; onNavigate: () => void }) { return process.env.NEXT_PUBLIC_AFDIAN_URL ? <a href="/api/afadian/purchase" className="flex w-full items-center justify-between rounded-xl bg-white px-4 py-3 text-sm font-medium text-[#182238] transition hover:bg-slate-100 active:translate-y-px">{afdian?.linked ? '前往爱发电购买权益' : afdian?.oauthConfigured ? '绑定爱发电并购买' : '前往爱发电获取兑换码'}<ExternalLink size={15}/></a> : <QuickAction label="前往兑换权益" onClick={onNavigate}/> }
 function QuickAction({ label, onClick }: { label: string; onClick: () => void }) { return <button onClick={onClick} className="flex w-full items-center justify-between rounded-xl bg-white/[0.07] px-4 py-3 text-left text-sm transition hover:bg-white/[0.12] active:translate-y-px">{label}<ArrowRight size={15} className="text-slate-400"/></button> }
