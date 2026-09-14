@@ -1,0 +1,28 @@
+'use client'
+
+import { useState } from 'react'
+import { Activity, ArrowRight, GitBranch, KeyRound, TicketCheck, Zap } from 'lucide-react'
+import { authClient } from '@/lib/auth-client'
+
+export default function LoginPage() {
+  const [pending, setPending] = useState(false)
+  const [error, setError] = useState('')
+
+  const signIn = async () => {
+    setPending(true)
+    setError('')
+    const result = await authClient.signIn.social({ provider: 'github', callbackURL: '/' })
+    if (result?.error) {
+      setError('GitHub 登录暂时不可用，请稍后重试。')
+      setPending(false)
+    }
+  }
+
+  return <main className="grid min-h-dvh bg-[#f3f6fb] lg:grid-cols-[minmax(0,1.05fr)_minmax(420px,.95fr)]">
+    <section className="relative hidden overflow-hidden bg-[#182238] p-12 text-white lg:flex lg:flex-col xl:p-16"><div className="absolute -left-32 top-1/4 size-96 rounded-full bg-[#3157d5]/25 blur-3xl"/><div className="relative flex items-center gap-3"><span className="grid size-10 place-items-center rounded-xl bg-[#3157d5]"><Zap size={18} fill="currentColor"/></span><span><strong className="block font-semibold">AccessHub</strong><span className="text-[10px] tracking-[.15em] text-slate-400">API ACCESS CONTROL</span></span></div><div className="relative my-auto max-w-xl"><p className="text-xs font-medium tracking-[.16em] text-[#91a7f3]">ACCESS BY POLICY</p><h1 className="mt-5 text-5xl font-semibold leading-[1.08] tracking-[-.045em] xl:text-6xl">清楚地知道<br/>每一次调用的边界。</h1><p className="mt-6 max-w-md text-sm leading-7 text-slate-300">登录后查看分钟、每日、每周与每月配额，在需要时通过兑换码升级访问权益。</p><div className="mt-12 grid grid-cols-3 gap-3"><Feature icon={<Activity size={17}/>} label="周期用量"/><Feature icon={<KeyRound size={17}/>} label="身份凭据"/><Feature icon={<TicketCheck size={17}/>} label="权益兑换"/></div></div><p className="relative text-xs text-slate-500">AccessHub 使用 GitHub 验证账户身份</p></section>
+
+    <section className="flex items-center justify-center px-6 py-12 sm:px-12"><div className="w-full max-w-md"><div className="mb-12 flex items-center gap-3 lg:hidden"><span className="grid size-10 place-items-center rounded-xl bg-[#3157d5] text-white"><Zap size={18} fill="currentColor"/></span><strong>AccessHub</strong></div><p className="text-xs font-medium tracking-wide text-[#3157d5]">欢迎回来</p><h2 className="mt-2 text-3xl font-semibold tracking-[-.035em]">登录访问控制台</h2><p className="mt-3 text-sm leading-6 text-slate-500">使用 GitHub 账户继续。首次登录的用户会进入默认用户组。</p><button onClick={() => void signIn()} disabled={pending} className="mt-9 flex h-12 w-full items-center justify-center gap-3 rounded-xl bg-[#182238] text-sm font-medium text-white shadow-[0_16px_36px_rgba(24,34,56,.16)] transition hover:-translate-y-0.5 hover:bg-slate-800 active:translate-y-px disabled:opacity-60"><GitBranch size={18}/>{pending ? '正在前往 GitHub…' : '使用 GitHub 登录'}<ArrowRight size={15}/></button>{error && <p className="mt-4 rounded-xl bg-rose-50 px-4 py-3 text-xs text-rose-600">{error}</p>}<div className="mt-10 border-t border-slate-200 pt-6"><p className="text-xs leading-5 text-slate-400">继续即表示你同意使用 GitHub OAuth 完成身份验证。AccessHub 不会读取你的仓库内容。</p></div></div></section>
+  </main>
+}
+
+function Feature({ icon, label }: { icon: React.ReactNode; label: string }) { return <div className="rounded-xl bg-white/[0.06] p-4"><span className="text-[#91a7f3]">{icon}</span><p className="mt-3 text-xs text-slate-300">{label}</p></div> }

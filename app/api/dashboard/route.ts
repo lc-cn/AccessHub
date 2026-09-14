@@ -1,14 +1,16 @@
 import { NextResponse } from 'next/server'
-import { and, count, desc, eq, gt, isNull, lte, or, sql } from 'drizzle-orm'
+import { and, count, desc, eq, gt, gte, isNull, lte, or, sql } from 'drizzle-orm'
 import { alias } from 'drizzle-orm/pg-core'
 import { headers } from 'next/headers'
 import { auth } from '@/lib/auth'
 import { db } from '@/lib/db'
 import { apiUsage, groupMemberships, groups, user } from '@/lib/db/schema'
+import { usagePeriodKeys } from '@/lib/usage-periods'
 
 export async function GET() {
   const session = await auth.api.getSession({ headers: await headers() })
-  const today = new Date().toISOString().slice(0, 10)
+  if (!session?.user) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+  const { today, weekStart, monthStart } = usagePeriodKeys()
   const dashboardGroups = alias(groups, 'dashboard_groups')
 
   const groupRows = await db
@@ -18,6 +20,8 @@ export async function GET() {
       description: dashboardGroups.description,
       rateLimit: dashboardGroups.rateLimit,
       dailyLimit: dashboardGroups.dailyLimit,
+      weeklyLimit: dashboardGroups.weeklyLimit,
+      monthlyLimit: dashboardGroups.monthlyLimit,
       isDefault: dashboardGroups.isDefault,
       memberCount: sql<number>`(
         select count(*)::int
@@ -46,10 +50,6 @@ export async function GET() {
     .from(dashboardGroups)
     .orderBy(desc(dashboardGroups.isDefault), dashboardGroups.createdAt)
 
-  if (!session?.user) {
-    return NextResponse.json({ authenticated: false, user: null, groups: groupRows })
-  }
-
   const now = new Date()
   const activeMembership = and(
     eq(groupMemberships.userId, session.user.id),
@@ -60,13 +60,17 @@ export async function GET() {
   const [[userRow], [membership], [usage], [benefits]] = await Promise.all([
     db.select({ id: user.id, name: user.name, image: user.image, role: user.role, createdAt: user.createdAt }).from(user).where(eq(user.id, session.user.id)).limit(1),
     db
-      .select({ groupId: groups.id, groupName: groups.name, rateLimit: groups.rateLimit, dailyLimit: groups.dailyLimit, expiresAt: groupMemberships.expiresAt })
+      .select({ groupId: groups.id, groupName: groups.name, rateLimit: groups.rateLimit, dailyLimit: groups.dailyLimit, weeklyLimit: groups.weeklyLimit, monthlyLimit: groups.monthlyLimit, expiresAt: groupMemberships.expiresAt })
       .from(groupMemberships)
       .innerJoin(groups, eq(groups.id, groupMemberships.groupId))
       .where(activeMembership)
       .orderBy(sql`${groupMemberships.expiresAt} desc nulls first`, desc(groupMemberships.startsAt))
       .limit(1),
-    db.select({ requestCount: apiUsage.requestCount }).from(apiUsage).where(and(eq(apiUsage.userId, session.user.id), eq(apiUsage.usageDate, today))).limit(1),
+    db.select({
+      daily: sql<number>`coalesce(sum(${apiUsage.requestCount}) filter (where ${apiUsage.usageDate} = ${today}), 0)::int`.mapWith(Number),
+      weekly: sql<number>`coalesce(sum(${apiUsage.requestCount}) filter (where ${apiUsage.usageDate} >= ${weekStart}), 0)::int`.mapWith(Number),
+      monthly: sql<number>`coalesce(sum(${apiUsage.requestCount}) filter (where ${apiUsage.usageDate} >= ${monthStart}), 0)::int`.mapWith(Number),
+    }).from(apiUsage).where(and(eq(apiUsage.userId, session.user.id), gte(apiUsage.usageDate, monthStart < weekStart ? monthStart : weekStart))),
     db.select({ count: count() }).from(groupMemberships).where(and(activeMembership, eq(groupMemberships.source, 'redeem'))),
   ])
 
@@ -76,6 +80,8 @@ export async function GET() {
     groupName: defaultGroup.name,
     rateLimit: defaultGroup.rateLimit,
     dailyLimit: defaultGroup.dailyLimit,
+    weeklyLimit: defaultGroup.weeklyLimit,
+    monthlyLimit: defaultGroup.monthlyLimit,
     expiresAt: null,
   } : null)
 
@@ -89,7 +95,7 @@ export async function GET() {
       createdAt: session.user.createdAt,
     },
     currentGroup,
-    todayUsage: usage?.requestCount ?? 0,
+    usage: { daily: usage?.daily ?? 0, weekly: usage?.weekly ?? 0, monthly: usage?.monthly ?? 0 },
     activeBenefits: benefits?.count ?? 0,
     groups: groupRows,
   })

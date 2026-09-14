@@ -1,7 +1,7 @@
 import { ArrowUpRight, Braces, KeyRound, ShieldCheck } from 'lucide-react'
 
 const endpoints = [
-  { method: 'POST', path: '/api/gateway', title: '验证访问权限', description: '验证当前会话对应用户组的频率与每日配额。' },
+  { method: 'POST', path: '/api/gateway', title: '验证访问权限', description: '原子校验当前用户组的分钟、每日、每周与每月配额。' },
   { method: 'POST', path: '/api/redeem', title: '核销兑换码', description: '将有效兑换码绑定到当前登录账户。' },
   { method: 'GET', path: '/api/dashboard', title: '读取工作台', description: '返回当前账户、用量、权益和用户组摘要。' },
 ]

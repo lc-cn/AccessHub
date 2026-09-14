@@ -4,6 +4,8 @@ export type DashboardGroup = {
   description: string
   rateLimit: number
   dailyLimit: number | null
+  weeklyLimit: number | null
+  monthlyLimit: number | null
   isDefault: boolean
   memberCount: number
 }
@@ -11,8 +13,8 @@ export type DashboardGroup = {
 export type DashboardData = {
   authenticated: boolean
   user: { id: string; name: string; image: string | null; role: string; createdAt: string } | null
-  currentGroup?: { groupId: string; groupName: string; rateLimit: number; dailyLimit: number | null; expiresAt: string | null } | null
-  todayUsage?: number
+  currentGroup?: { groupId: string; groupName: string; rateLimit: number; dailyLimit: number | null; weeklyLimit: number | null; monthlyLimit: number | null; expiresAt: string | null } | null
+  usage?: { daily: number; weekly: number; monthly: number }
   activeBenefits?: number
   groups: DashboardGroup[]
 }

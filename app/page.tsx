@@ -1,7 +1,8 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { BookOpen, GitBranch, LayoutDashboard, LogOut, RefreshCw, Ticket, Users, Zap } from 'lucide-react'
+import { BookOpen, LayoutDashboard, LogOut, RefreshCw, Ticket, Users, Zap } from 'lucide-react'
+import { useRouter } from 'next/navigation'
 import { ApiDocs } from '@/components/access-hub/api-docs'
 import { GroupManagement } from '@/components/access-hub/group-management'
 import { Overview } from '@/components/access-hub/overview'
@@ -18,6 +19,7 @@ const viewMeta: Record<View, { eyebrow: string; description: string }> = {
 }
 
 export default function Page() {
+  const router = useRouter()
   const [active, setActive] = useState<View>('概览')
   const [dashboard, setDashboard] = useState<DashboardData | null>(null)
   const [dashboardError, setDashboardError] = useState('')
@@ -29,6 +31,10 @@ export default function Page() {
     setDashboardError('')
     try {
       const response = await fetch('/api/dashboard', { cache: 'no-store' })
+      if (response.status === 401) {
+        router.replace('/login')
+        return
+      }
       if (!response.ok) throw new Error('dashboard request failed')
       setDashboard(await response.json())
     } catch {
@@ -36,15 +42,15 @@ export default function Page() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [router])
 
   useEffect(() => { void loadDashboard() }, [loadDashboard])
 
   const signIn = async () => { await authClient.signIn.social({ provider: 'github', callbackURL: window.location.origin }) }
   const signOut = async () => {
     await authClient.signOut()
-    setActive('概览')
-    await loadDashboard()
+    router.replace('/login')
+    router.refresh()
   }
   const copyId = async () => {
     if (!dashboard?.user?.id) return
@@ -66,7 +72,7 @@ export default function Page() {
     </aside>
 
     <main className="min-h-screen lg:pl-64">
-      <header className="sticky top-0 z-10 border-b border-[#e3e9f3] bg-white/90 backdrop-blur-xl"><div className="flex h-[76px] items-center justify-between px-5 sm:px-8 lg:px-10"><div><p className="text-[11px] font-medium tracking-[.12em] text-slate-400">{viewMeta[active].eyebrow}</p><h1 className="mt-1 text-xl font-semibold tracking-tight">{active}</h1></div><div className="flex items-center gap-2 sm:gap-3"><span className="mr-2 hidden items-center gap-2 text-xs text-slate-500 sm:flex"><span className={`size-2 rounded-full ${dashboardError ? 'bg-rose-500' : loading ? 'bg-amber-400' : 'bg-emerald-500'}`}/>{dashboardError ? '同步失败' : loading ? '同步中' : '数据已同步'}</span><button onClick={() => void loadDashboard()} disabled={loading} aria-label="刷新数据" className="grid size-9 place-items-center rounded-xl border border-slate-200 text-slate-500 transition hover:border-slate-300 hover:bg-slate-50 active:translate-y-px disabled:opacity-50"><RefreshCw size={15} className={loading ? 'animate-spin' : ''}/></button>{!isAuthenticated && <button onClick={() => void signIn()} className="flex h-9 items-center gap-2 rounded-xl bg-[#3157d5] px-3.5 text-xs font-medium text-white transition hover:bg-[#284bc2] active:translate-y-px"><GitBranch size={15}/>登录</button>}<div className="lg:hidden"><Avatar user={user}/></div></div></div>
+      <header className="sticky top-0 z-10 border-b border-[#e3e9f3] bg-white/90 backdrop-blur-xl"><div className="flex h-[76px] items-center justify-between px-5 sm:px-8 lg:px-10"><div><p className="text-[11px] font-medium tracking-[.12em] text-slate-400">{viewMeta[active].eyebrow}</p><h1 className="mt-1 text-xl font-semibold tracking-tight">{active}</h1></div><div className="flex items-center gap-2 sm:gap-3"><span className="mr-2 hidden items-center gap-2 text-xs text-slate-500 sm:flex"><span className={`size-2 rounded-full ${dashboardError ? 'bg-rose-500' : loading ? 'bg-amber-400' : 'bg-emerald-500'}`}/>{dashboardError ? '同步失败' : loading ? '同步中' : '数据已同步'}</span><button onClick={() => void loadDashboard()} disabled={loading} aria-label="刷新数据" className="grid size-9 place-items-center rounded-xl border border-slate-200 text-slate-500 transition hover:border-slate-300 hover:bg-slate-50 active:translate-y-px disabled:opacity-50"><RefreshCw size={15} className={loading ? 'animate-spin' : ''}/></button><div className="lg:hidden"><Avatar user={user}/></div></div></div>
         <nav className="flex gap-1 overflow-x-auto px-5 pb-3 lg:hidden" aria-label="移动端导航">{views.map((view) => <button key={view} onClick={() => setActive(view)} className={`shrink-0 rounded-lg px-3 py-1.5 text-xs font-medium transition ${active === view ? 'bg-[#182238] text-white' : 'text-slate-500'}`}>{view}</button>)}</nav>
       </header>
 
