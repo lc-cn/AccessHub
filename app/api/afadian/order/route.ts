@@ -3,7 +3,7 @@ import { eq, sql } from 'drizzle-orm'
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { afadianBenefitRules, afadianOrders, groups, redeemCodes } from '@/lib/db/schema'
-import { resolveAfdianBenefit } from '@/lib/afadian-benefits'
+import { resolveAfdianWebhookBenefit } from '@/lib/afadian-benefits'
 import { legacyDurationDays, type EntitlementUnit, type RedeemKind } from '@/lib/entitlements'
 
 function response(ec: number, em: string, data?: Record<string, unknown>, status = 200) {
@@ -39,7 +39,7 @@ export async function POST(request: Request) {
   const skuDetails = Array.isArray(order?.sku_detail) ? order.sku_detail as Array<Record<string, unknown>> : []
   const skuIds = skuDetails.map((item) => String(item.sku_id || '')).filter(Boolean)
   const storedRules = await db.select().from(afadianBenefitRules).where(eq(afadianBenefitRules.enabled, true))
-  const resolved = resolveAfdianBenefit(storedRules.map((rule) => ({
+  const resolution = resolveAfdianWebhookBenefit(storedRules.map((rule) => ({
     benefitKey: rule.benefitKey,
     enabled: rule.enabled,
     kind: rule.kind as RedeemKind,
@@ -48,8 +48,10 @@ export async function POST(request: Request) {
     durationValue: rule.durationValue,
     durationUnit: rule.durationUnit as EntitlementUnit,
     codesPerItem: rule.codesPerItem,
-  })), planId, skuIds)
-  if (!resolved) return response(422, 'no valid entitlement mapping for this plan or sku')
+  })), { outTradeNo, planId, skuIds })
+  if (resolution.outcome === 'probe') return response(200, 'ok', { probe: true })
+  if (resolution.outcome === 'unmapped') return response(422, 'no valid entitlement mapping for this plan or sku')
+  const { resolved } = resolution
 
   const itemCount = skuDetails.length ? skuDetails.reduce((total, item) => total + Math.max(0, Number(item.count) || 0), 0) : 1
   const codeCount = Math.max(1, itemCount) * resolved.benefit.codesPerItem
