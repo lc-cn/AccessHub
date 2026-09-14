@@ -22,7 +22,6 @@ type AfdianOrderIdentity = {
 const AFDIAN_WEBHOOK_PROBE = {
   outTradeNo: '202106232138371083454010626',
   planId: 'a45353328af911eb973052540025c377',
-  skuId: 'b082342c4aba11ebb5cb52540025c377',
 } as const
 
 export function resolveAfdianBenefit(rules: AfdianBenefitRule[], planId: string, skuIds: string[]) {
@@ -39,6 +38,5 @@ export function resolveAfdianWebhookBenefit(rules: AfdianBenefitRule[], order: A
 
   const isProbe = order.outTradeNo === AFDIAN_WEBHOOK_PROBE.outTradeNo
     && order.planId === AFDIAN_WEBHOOK_PROBE.planId
-    && order.skuIds.includes(AFDIAN_WEBHOOK_PROBE.skuId)
   return isProbe ? { outcome: 'probe' as const } : { outcome: 'unmapped' as const }
 }
