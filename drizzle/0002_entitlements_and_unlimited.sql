@@ -3,6 +3,13 @@ ALTER TABLE "groups"
   ALTER COLUMN "weeklyLimit" SET DEFAULT -1,
   ALTER COLUMN "monthlyLimit" SET DEFAULT -1;
 
+ALTER TABLE "groups" DROP CONSTRAINT IF EXISTS "groups_weekly_limit_positive";
+ALTER TABLE "groups" DROP CONSTRAINT IF EXISTS "groups_monthly_limit_positive";
+ALTER TABLE "groups" DROP CONSTRAINT IF EXISTS "groups_rate_limit_valid";
+ALTER TABLE "groups" DROP CONSTRAINT IF EXISTS "groups_daily_limit_valid";
+ALTER TABLE "groups" DROP CONSTRAINT IF EXISTS "groups_weekly_limit_valid";
+ALTER TABLE "groups" DROP CONSTRAINT IF EXISTS "groups_monthly_limit_valid";
+
 UPDATE "groups" SET "dailyLimit" = -1 WHERE "dailyLimit" IS NULL;
 UPDATE "groups" SET "weeklyLimit" = -1 WHERE "weeklyLimit" IS NULL;
 UPDATE "groups" SET "monthlyLimit" = -1 WHERE "monthlyLimit" IS NULL;
@@ -11,13 +18,6 @@ ALTER TABLE "groups"
   ALTER COLUMN "dailyLimit" SET NOT NULL,
   ALTER COLUMN "weeklyLimit" SET NOT NULL,
   ALTER COLUMN "monthlyLimit" SET NOT NULL;
-
-ALTER TABLE "groups" DROP CONSTRAINT IF EXISTS "groups_weekly_limit_positive";
-ALTER TABLE "groups" DROP CONSTRAINT IF EXISTS "groups_monthly_limit_positive";
-ALTER TABLE "groups" DROP CONSTRAINT IF EXISTS "groups_rate_limit_valid";
-ALTER TABLE "groups" DROP CONSTRAINT IF EXISTS "groups_daily_limit_valid";
-ALTER TABLE "groups" DROP CONSTRAINT IF EXISTS "groups_weekly_limit_valid";
-ALTER TABLE "groups" DROP CONSTRAINT IF EXISTS "groups_monthly_limit_valid";
 
 ALTER TABLE "groups"
   ADD CONSTRAINT "groups_rate_limit_valid" CHECK ("rateLimit" = -1 OR "rateLimit" > 0),
@@ -64,6 +64,16 @@ CREATE TABLE IF NOT EXISTS "credit_grants" (
 );
 
 CREATE INDEX IF NOT EXISTS "credit_grants_user_expiry_idx" ON "credit_grants" ("userId", "expiresAt");
+
+CREATE TABLE IF NOT EXISTS "afadian_orders" (
+  "id" text PRIMARY KEY NOT NULL,
+  "outTradeNo" text NOT NULL UNIQUE,
+  "userId" text,
+  "benefitKey" text,
+  "generatedCodes" text NOT NULL DEFAULT '[]',
+  "payload" text NOT NULL,
+  "createdAt" timestamp NOT NULL DEFAULT now()
+);
 
 ALTER TABLE "afadian_orders"
   ADD COLUMN IF NOT EXISTS "benefitKey" text,
