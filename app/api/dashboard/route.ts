@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { and, count, desc, eq, gt, isNull, lte, or, sql } from 'drizzle-orm'
+import { alias } from 'drizzle-orm/pg-core'
 import { headers } from 'next/headers'
 import { auth } from '@/lib/auth'
 import { db } from '@/lib/db'
@@ -8,15 +9,16 @@ import { apiUsage, groupMemberships, groups, user } from '@/lib/db/schema'
 export async function GET() {
   const session = await auth.api.getSession({ headers: await headers() })
   const today = new Date().toISOString().slice(0, 10)
+  const dashboardGroups = alias(groups, 'dashboard_groups')
 
   const groupRows = await db
     .select({
-      id: groups.id,
-      name: groups.name,
-      description: groups.description,
-      rateLimit: groups.rateLimit,
-      dailyLimit: groups.dailyLimit,
-      isDefault: groups.isDefault,
+      id: dashboardGroups.id,
+      name: dashboardGroups.name,
+      description: dashboardGroups.description,
+      rateLimit: dashboardGroups.rateLimit,
+      dailyLimit: dashboardGroups.dailyLimit,
+      isDefault: dashboardGroups.isDefault,
       memberCount: sql<number>`(
         select count(*)::int
         from ${user} as dashboard_user
@@ -38,11 +40,11 @@ export async function GET() {
             order by dashboard_default_group."createdAt" asc
             limit 1
           )
-        ) = ${groups.id}
+        ) = ${dashboardGroups.id}
       )`.mapWith(Number),
     })
-    .from(groups)
-    .orderBy(desc(groups.isDefault), groups.createdAt)
+    .from(dashboardGroups)
+    .orderBy(desc(dashboardGroups.isDefault), dashboardGroups.createdAt)
 
   if (!session?.user) {
     return NextResponse.json({ authenticated: false, user: null, groups: groupRows })

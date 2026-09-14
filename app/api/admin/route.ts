@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { and, asc, eq, isNull, not } from 'drizzle-orm'
+import { and, asc, desc, eq, not } from 'drizzle-orm'
 import { randomBytes, randomUUID } from 'crypto'
 import { headers } from 'next/headers'
 import { auth } from '@/lib/auth'
@@ -22,8 +22,28 @@ async function requireAdmin() {
 export async function GET() {
   if (!(await requireAdmin())) return NextResponse.json({ error: '无权访问' }, { status: 403 })
   const rows = await db.select().from(groups).orderBy(asc(groups.createdAt))
-  const codes = await db.select({ code: redeemCodes.code, groupId: redeemCodes.groupId, durationDays: redeemCodes.durationDays, redeemedAt: redeemCodes.redeemedAt, createdAt: redeemCodes.createdAt }).from(redeemCodes).orderBy(asc(redeemCodes.createdAt)).limit(100)
+  const codes = await db
+    .select({
+      id: redeemCodes.id,
+      code: redeemCodes.code,
+      groupId: redeemCodes.groupId,
+      groupName: groups.name,
+      durationDays: redeemCodes.durationDays,
+      expiresAt: redeemCodes.expiresAt,
+      redeemedAt: redeemCodes.redeemedAt,
+      createdAt: redeemCodes.createdAt,
+    })
+    .from(redeemCodes)
+    .innerJoin(groups, eq(groups.id, redeemCodes.groupId))
+    .orderBy(desc(redeemCodes.createdAt))
+    .limit(200)
   return NextResponse.json({ groups: rows, codes })
+}
+
+function positiveInteger(value: unknown, fallback?: number) {
+  if ((value === '' || value == null) && fallback !== undefined) return fallback
+  const parsed = Number(value)
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null
 }
 
 export async function POST(request: Request) {
@@ -31,17 +51,23 @@ export async function POST(request: Request) {
   const body = await request.json().catch(() => ({}))
   if (body.type === 'group') {
     const name = String(body.name || '').trim()
-    const rateLimit = Math.max(1, Number(body.rateLimit) || 60)
-    const dailyLimit = body.dailyLimit === '' || body.dailyLimit == null ? null : Math.max(1, Number(body.dailyLimit) || 1)
+    const rateLimit = positiveInteger(body.rateLimit, 60)
+    const dailyLimit = body.dailyLimit === '' || body.dailyLimit == null ? null : positiveInteger(body.dailyLimit)
     if (!name) return NextResponse.json({ error: '请输入用户组名称' }, { status: 400 })
-    const [created] = await db.insert(groups).values({ id: randomUUID(), name, description: String(body.description || ''), rateLimit, dailyLimit, isDefault: Boolean(body.isDefault) }).returning()
+    if (!rateLimit || (body.dailyLimit !== '' && body.dailyLimit != null && !dailyLimit)) return NextResponse.json({ error: '配额必须是正整数' }, { status: 400 })
+    const [sameName] = await db.select({ id: groups.id }).from(groups).where(eq(groups.name, name)).limit(1)
+    if (sameName) return NextResponse.json({ error: '用户组名称已存在' }, { status: 409 })
+    const [existingGroup] = await db.select({ id: groups.id }).from(groups).limit(1)
+    const [created] = await db.insert(groups).values({ id: randomUUID(), name, description: String(body.description || '').trim(), rateLimit, dailyLimit, isDefault: Boolean(body.isDefault) || !existingGroup }).returning()
     if (created.isDefault) await db.update(groups).set({ isDefault: false }).where(and(eq(groups.isDefault, true), not(eq(groups.id, created.id))))
     return NextResponse.json({ group: created })
   }
   if (body.type === 'codes') {
     const groupId = String(body.groupId || '')
-    const count = Math.min(1000, Math.max(1, Number(body.count) || 1))
-    const durationDays = Math.max(1, Number(body.durationDays) || 30)
+    const requestedCount = positiveInteger(body.count, 1)
+    const durationDays = positiveInteger(body.durationDays, 30)
+    if (!requestedCount || requestedCount > 1000 || !durationDays) return NextResponse.json({ error: '数量需为 1–1000，有效期需为正整数' }, { status: 400 })
+    const count = requestedCount
     const [target] = await db.select({ id: groups.id }).from(groups).where(eq(groups.id, groupId)).limit(1)
     if (!target) return NextResponse.json({ error: '用户组不存在' }, { status: 400 })
     const values = Array.from({ length: count }, () => ({ id: randomUUID(), code: `ACCS-${randomBytes(3).toString('hex').toUpperCase()}-${randomBytes(3).toString('hex').toUpperCase()}`, groupId, durationDays }))
@@ -49,4 +75,34 @@ export async function POST(request: Request) {
     return NextResponse.json({ codes: values.map((item) => item.code) })
   }
   return NextResponse.json({ error: '未知操作' }, { status: 400 })
+}
+
+export async function PATCH(request: Request) {
+  if (!(await requireAdmin())) return NextResponse.json({ error: '无权操作' }, { status: 403 })
+  const body = await request.json().catch(() => ({}))
+  if (body.type !== 'group') return NextResponse.json({ error: '未知操作' }, { status: 400 })
+
+  const groupId = String(body.groupId || '')
+  const name = String(body.name || '').trim()
+  const rateLimit = positiveInteger(body.rateLimit)
+  const dailyLimit = body.dailyLimit === '' || body.dailyLimit == null ? null : positiveInteger(body.dailyLimit)
+  if (!groupId || !name) return NextResponse.json({ error: '用户组和名称不能为空' }, { status: 400 })
+  if (!rateLimit || (body.dailyLimit !== '' && body.dailyLimit != null && !dailyLimit)) return NextResponse.json({ error: '配额必须是正整数' }, { status: 400 })
+
+  const [target] = await db.select({ id: groups.id, isDefault: groups.isDefault }).from(groups).where(eq(groups.id, groupId)).limit(1)
+  if (!target) return NextResponse.json({ error: '用户组不存在' }, { status: 404 })
+  const [sameName] = await db.select({ id: groups.id }).from(groups).where(and(eq(groups.name, name), not(eq(groups.id, groupId)))).limit(1)
+  if (sameName) return NextResponse.json({ error: '用户组名称已存在' }, { status: 409 })
+
+  const makeDefault = Boolean(body.isDefault)
+  if (makeDefault) await db.update(groups).set({ isDefault: false }).where(and(eq(groups.isDefault, true), not(eq(groups.id, groupId))))
+  const [updated] = await db.update(groups).set({
+    name,
+    description: String(body.description || '').trim(),
+    rateLimit,
+    dailyLimit,
+    isDefault: target.isDefault || makeDefault,
+    updatedAt: new Date(),
+  }).where(eq(groups.id, groupId)).returning()
+  return NextResponse.json({ group: updated })
 }
