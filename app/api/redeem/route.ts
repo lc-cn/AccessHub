@@ -3,7 +3,7 @@ import { eq, and, gt, isNull, or } from 'drizzle-orm'
 import { randomUUID } from 'crypto'
 import { auth } from '@/lib/auth'
 import { db } from '@/lib/db'
-import { creditGrants, redeemCodes, groupMemberships, groups } from '@/lib/db/schema'
+import { creditGrants, redeemCodes, subscriptions, subscriptionPlans } from '@/lib/db/schema'
 import { headers } from 'next/headers'
 import { entitlementExpiresAt, type EntitlementUnit } from '@/lib/entitlements'
 
@@ -19,7 +19,7 @@ export async function POST(request: Request) {
       .update(redeemCodes)
       .set({ redeemedAt: now, redeemedBy: session.user.id })
       .where(and(eq(redeemCodes.code, code), isNull(redeemCodes.redeemedAt), or(isNull(redeemCodes.expiresAt), gt(redeemCodes.expiresAt, now))))
-      .returning({ id: redeemCodes.id, kind: redeemCodes.kind, groupId: redeemCodes.groupId, credits: redeemCodes.credits, durationValue: redeemCodes.durationValue, durationUnit: redeemCodes.durationUnit })
+      .returning({ id: redeemCodes.id, kind: redeemCodes.kind, planId: redeemCodes.planId, credits: redeemCodes.credits, durationValue: redeemCodes.durationValue, durationUnit: redeemCodes.durationUnit })
     if (!item) return NextResponse.json({ error: '兑换码无效、已核销或已过期' }, { status: 400 })
 
     const expiresAt = entitlementExpiresAt(now, item.durationValue, item.durationUnit as EntitlementUnit)
@@ -29,9 +29,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: true, kind: 'credits', credits: item.credits, expiresAt: expiresAt?.toISOString() ?? null })
     }
 
-    if (!item.groupId) throw new Error('group redeem code has no group')
-    await tx.insert(groupMemberships).values({ id: randomUUID(), userId: session.user.id, groupId: item.groupId, startsAt: now, expiresAt, source: 'redeem' })
-    const [group] = await tx.select({ name: groups.name }).from(groups).where(eq(groups.id, item.groupId)).limit(1)
-    return NextResponse.json({ ok: true, kind: 'group', group: group?.name, expiresAt: expiresAt?.toISOString() ?? null })
+    if (!item.planId) throw new Error('plan redeem code has no subscription plan')
+    await tx.insert(subscriptions).values({ id: randomUUID(), userId: session.user.id, planId: item.planId, startsAt: now, expiresAt, source: 'redeem' })
+    const [plan] = await tx.select({ name: subscriptionPlans.name }).from(subscriptionPlans).where(eq(subscriptionPlans.id, item.planId)).limit(1)
+    return NextResponse.json({ ok: true, kind: 'plan', plan: plan?.name, expiresAt: expiresAt?.toISOString() ?? null })
   })
 }

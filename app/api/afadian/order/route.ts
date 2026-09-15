@@ -2,8 +2,8 @@ import { randomBytes, randomUUID, timingSafeEqual } from 'crypto'
 import { and, eq, or, sql } from 'drizzle-orm'
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { afadianBenefitRules, afadianOrders, groups, redeemCodes } from '@/lib/db/schema'
-import { resolveAfdianWebhookBenefit } from '@/lib/afadian-benefits'
+import { afdianOfferMappings, afadianOrders, subscriptionPlans, redeemCodes } from '@/lib/db/schema'
+import { resolveAfdianWebhookOffer } from '@/lib/afadian-benefits'
 import { buildRedemptionMessage, messageDeliveryAction, orderDurationMonths, type AfdianMessageStatus } from '@/lib/afdian-commerce'
 import { sendAfdianPrivateMessage } from '@/lib/afdian-messenger'
 import { legacyDurationDays, type EntitlementUnit, type RedeemKind } from '@/lib/entitlements'
@@ -67,7 +67,7 @@ export async function POST(request: Request) {
   if (payload.data?.type !== 'order' || !outTradeNo) return response(400, 'missing order')
   if (Number(order?.status) !== 2) return response(200, 'ignored unpaid order')
 
-  const planId = String(order?.plan_id || '').trim()
+  const afdianPlanId = String(order?.plan_id || '').trim()
   const afdianUserId = String(order?.user_id || '').trim()
   const months = orderDurationMonths(order?.month)
   if (!afdianUserId) return response(422, 'paid order has no user_id')
@@ -75,19 +75,19 @@ export async function POST(request: Request) {
 
   const skuDetails = Array.isArray(order?.sku_detail) ? order.sku_detail as Array<Record<string, unknown>> : []
   const skuIds = skuDetails.map((item) => String(item.sku_id || '')).filter(Boolean)
-  const storedRules = await db.select().from(afadianBenefitRules).where(eq(afadianBenefitRules.enabled, true))
-  const resolution = resolveAfdianWebhookBenefit(storedRules.map((rule) => ({
-    benefitKey: rule.benefitKey,
-    enabled: rule.enabled,
-    kind: rule.kind as RedeemKind,
-    groupId: rule.groupId ?? undefined,
-    credits: rule.credits ?? undefined,
-    durationValue: rule.durationValue,
-    durationUnit: rule.durationUnit as EntitlementUnit,
-    codesPerItem: rule.codesPerItem,
-  })), { outTradeNo, planId, skuIds })
+  const storedMappings = await db.select().from(afdianOfferMappings).where(eq(afdianOfferMappings.enabled, true))
+  const resolution = resolveAfdianWebhookOffer(storedMappings.map((mapping) => ({
+    offerKey: mapping.offerKey,
+    enabled: mapping.enabled,
+    kind: mapping.kind as RedeemKind,
+    planId: mapping.planId ?? undefined,
+    credits: mapping.credits ?? undefined,
+    durationValue: mapping.durationValue,
+    durationUnit: mapping.durationUnit as EntitlementUnit,
+    codesPerItem: mapping.codesPerItem,
+  })), { outTradeNo, afdianPlanId, skuIds })
   if (resolution.outcome === 'probe') return response(200, 'ok', { probe: true })
-  if (resolution.outcome === 'unmapped') return response(422, 'no valid entitlement mapping for this plan or sku')
+  if (resolution.outcome === 'unmapped') return response(422, 'no valid Afdian offer mapping for this plan or sku')
   const { resolved } = resolution
 
   const itemCount = skuDetails.length ? skuDetails.reduce((total, item) => total + Math.max(0, Number(item.count) || 0), 0) : 1
@@ -100,9 +100,9 @@ export async function POST(request: Request) {
       const [existing] = await tx.select({ id: afadianOrders.id, generatedCodes: afadianOrders.generatedCodes, orderMonths: afadianOrders.orderMonths }).from(afadianOrders).where(eq(afadianOrders.outTradeNo, outTradeNo)).limit(1)
       if (existing) return { orderId: existing.id, duplicate: true, codes: JSON.parse(existing.generatedCodes) as string[], months: existing.orderMonths }
 
-      if (resolved.benefit.kind === 'group') {
-        const [group] = await tx.select({ id: groups.id }).from(groups).where(eq(groups.id, resolved.benefit.groupId!)).limit(1)
-        if (!group) throw new Error('mapped user group does not exist')
+      if (resolved.benefit.kind === 'plan') {
+        const [plan] = await tx.select({ id: subscriptionPlans.id }).from(subscriptionPlans).where(eq(subscriptionPlans.id, resolved.benefit.planId!)).limit(1)
+        if (!plan) throw new Error('mapped subscription plan does not exist')
       }
 
       const orderId = randomUUID()
@@ -110,7 +110,7 @@ export async function POST(request: Request) {
         id: randomUUID(),
         code: `AFD-${randomBytes(4).toString('hex').toUpperCase()}-${randomBytes(4).toString('hex').toUpperCase()}`,
         kind: resolved.benefit.kind,
-        groupId: resolved.benefit.kind === 'group' ? resolved.benefit.groupId! : null,
+        planId: resolved.benefit.kind === 'plan' ? resolved.benefit.planId! : null,
         credits: resolved.benefit.kind === 'credits' ? resolved.benefit.credits! : null,
         durationDays: legacyDurationDays(months, 'month'),
         durationValue: months,
@@ -123,11 +123,11 @@ export async function POST(request: Request) {
         id: orderId,
         outTradeNo,
         userId: afdianUserId,
-        planId,
-        planTitle: String(order?.plan_title || order?.title || '').trim(),
+        afdianPlanId,
+        afdianPlanTitle: String(order?.plan_title || order?.title || '').trim(),
         orderMonths: months,
         amount: String(order?.total_amount || '').trim(),
-        benefitKey: resolved.key,
+        offerKey: resolved.key,
         generatedCodes: JSON.stringify(codes),
         messageStatus: 'pending',
         payload: raw,

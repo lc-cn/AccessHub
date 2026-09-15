@@ -32,7 +32,7 @@ https://www.l2cl.link/api/auth/callback/afdian
 
 ## Entitlements
 
-User-group minute, daily, weekly, and monthly limits accept `-1` for unlimited access. Redeem codes can grant either a user group or an additive credits pack. Credits are consumed one at a time only after a base group limit is reached; grants that expire sooner are consumed first. Entitlement terms support `day`, `month`, `quarter`, and `year`, while a duration value of `-1` means permanent.
+Subscription-plan minute, daily, weekly, and monthly limits accept `-1` for unlimited access. Redeem codes can grant either a subscription plan or an additive credits pack. Credits are consumed one at a time only after a base subscription plan limit is reached; grants that expire sooner are consumed first. Entitlement terms support `day`, `month`, `quarter`, and `year`, while a duration value of `-1` means permanent.
 
 ## Afdian automatic fulfillment
 
@@ -44,7 +44,7 @@ https://your-domain.example/api/afadian/order?token=<AFDIAN_WEBHOOK_SECRET>
 
 Set `AFDIAN_WEBHOOK_SECRET` to a long random value and redact the webhook query string from access logs. To send generated codes through Afdian private messages, also configure the creator account's `AFDIAN_USER_ID` and OpenAPI token as `AFDIAN_ADMIN_TOKEN`.
 
-Configure plan and SKU mappings in the administrator-only **Afdian mappings** page. Each mapping grants a user group or credits pack and sets the number of codes per purchased item. SKU mappings take precedence over plan mappings. An enabled `plan:<plan_id>` mapping also turns the corresponding dashboard plan card into a direct Afdian checkout link.
+Configure plan and Afdian SKU mappings in the administrator-only **Afdian mappings** page. Each mapping grants a subscription plan or credits pack and sets the number of codes per purchased item. Afdian SKU mappings take precedence over Afdian plan mappings. An enabled `afdian-plan:<plan_id>` mapping also turns the corresponding dashboard plan card into a direct Afdian checkout link.
 
 The webhook accepts paid orders only and uses `out_trade_no` as its idempotency key. Every valid mapped order generates `AFD-...` codes. The code term is taken from `data.order.month`, expressed in months, and its effective period starts only when the user redeems the code. The buyer is notified through `/api/open/send-msg`, using `data.order.user_id` as `recipient`. The administrator-only `/admin/afdian-orders` area shows each order, generated code, message delivery state, and redemption state. Definite message failures may retry on a repeated webhook; unknown delivery outcomes are held for manual reconciliation to avoid duplicate messages.
 
@@ -55,7 +55,7 @@ Apply SQL files in `drizzle/` to the PostgreSQL database before deploying schema
 The console uses path-based routes rather than query-string views:
 
 - `/dashboard`, `/redeem-codes`, and `/api-docs` are regular user pages.
-- `/admin/groups`, `/admin/redeem-codes`, `/admin/afdian-mappings`, and `/admin/afdian-orders` are administrator list pages.
+- `/admin/plans`, `/admin/redeem-codes`, `/admin/afdian-mappings`, and `/admin/afdian-orders` are administrator list pages.
 - New resources use `/new`; editable resources use `/{id}`.
 
 `/` redirects to `/dashboard`. The old `?view=` navigation is intentionally unsupported.

@@ -4,7 +4,7 @@ import { headers } from 'next/headers'
 import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { db } from '@/lib/db'
-import { apiUsage, creditGrants, groupMemberships, groups } from '@/lib/db/schema'
+import { apiUsage, creditGrants, subscriptions, subscriptionPlans } from '@/lib/db/schema'
 import { retryAfterSeconds, usagePeriodKeys } from '@/lib/usage-periods'
 import { isUnlimited } from '@/lib/entitlements'
 
@@ -21,26 +21,26 @@ export async function POST() {
 
     await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${session.user.id}))`)
 
-    const [membership] = await tx
+    const [subscription] = await tx
       .select({
-        groupId: groups.id,
-        groupName: groups.name,
-        rateLimit: groups.rateLimit,
-        dailyLimit: groups.dailyLimit,
-        weeklyLimit: groups.weeklyLimit,
-        monthlyLimit: groups.monthlyLimit,
+        planId: subscriptionPlans.id,
+        planName: subscriptionPlans.name,
+        rateLimit: subscriptionPlans.rateLimit,
+        dailyLimit: subscriptionPlans.dailyLimit,
+        weeklyLimit: subscriptionPlans.weeklyLimit,
+        monthlyLimit: subscriptionPlans.monthlyLimit,
       })
-      .from(groupMemberships)
-      .innerJoin(groups, eq(groups.id, groupMemberships.groupId))
-      .where(and(eq(groupMemberships.userId, session.user.id), lte(groupMemberships.startsAt, now), or(isNull(groupMemberships.expiresAt), gt(groupMemberships.expiresAt, now))))
-      .orderBy(desc(groupMemberships.startsAt), sql`${groupMemberships.expiresAt} desc nulls first`)
+      .from(subscriptions)
+      .innerJoin(subscriptionPlans, eq(subscriptionPlans.id, subscriptions.planId))
+      .where(and(eq(subscriptions.userId, session.user.id), lte(subscriptions.startsAt, now), or(isNull(subscriptions.expiresAt), gt(subscriptions.expiresAt, now))))
+      .orderBy(desc(subscriptions.startsAt), sql`${subscriptions.expiresAt} desc nulls first`)
       .limit(1)
-    const [defaultGroup] = membership ? [] : await tx
-      .select({ groupId: groups.id, groupName: groups.name, rateLimit: groups.rateLimit, dailyLimit: groups.dailyLimit, weeklyLimit: groups.weeklyLimit, monthlyLimit: groups.monthlyLimit })
-      .from(groups)
-      .where(eq(groups.isDefault, true))
+    const [defaultPlan] = subscription ? [] : await tx
+      .select({ planId: subscriptionPlans.id, planName: subscriptionPlans.name, rateLimit: subscriptionPlans.rateLimit, dailyLimit: subscriptionPlans.dailyLimit, weeklyLimit: subscriptionPlans.weeklyLimit, monthlyLimit: subscriptionPlans.monthlyLimit })
+      .from(subscriptionPlans)
+      .where(eq(subscriptionPlans.isDefault, true))
       .limit(1)
-    const policy = membership ?? defaultGroup
+    const policy = subscription ?? defaultPlan
     if (!policy) return NextResponse.json({ error: 'access_policy_missing' }, { status: 403 })
 
     const [totals] = await tx
@@ -95,6 +95,6 @@ export async function POST() {
 
     const [creditTotal] = await tx.select({ total: sql<number>`coalesce(sum(${creditGrants.remainingCredits}), 0)::int`.mapWith(Number) }).from(creditGrants).where(and(eq(creditGrants.userId, session.user.id), gt(creditGrants.remainingCredits, 0), or(isNull(creditGrants.expiresAt), gt(creditGrants.expiresAt, now))))
     creditsRemaining = creditTotal?.total ?? 0
-    return NextResponse.json({ ok: true, group: policy.groupName, creditUsed, creditsRemaining, usage: { minute: minuteCount + 1, daily: (totals?.daily ?? 0) + 1, weekly: (totals?.weekly ?? 0) + 1, monthly: (totals?.monthly ?? 0) + 1 } })
+    return NextResponse.json({ ok: true, plan: policy.planName, creditUsed, creditsRemaining, usage: { minute: minuteCount + 1, daily: (totals?.daily ?? 0) + 1, weekly: (totals?.weekly ?? 0) + 1, monthly: (totals?.monthly ?? 0) + 1 } })
   })
 }

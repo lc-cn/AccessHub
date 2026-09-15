@@ -2,7 +2,7 @@ export const UNLIMITED = -1
 
 export const entitlementUnits = ['day', 'month', 'quarter', 'year'] as const
 export type EntitlementUnit = typeof entitlementUnits[number]
-export type RedeemKind = 'group' | 'credits'
+export type RedeemKind = 'plan' | 'credits'
 
 export function isUnlimited(value: number | null | undefined) {
   return value == null || value === UNLIMITED

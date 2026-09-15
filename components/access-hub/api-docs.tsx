@@ -2,8 +2,8 @@ import { ArrowUpRight, Braces, KeyRound, ShieldCheck } from 'lucide-react'
 
 const endpoints = [
   { method: 'POST', path: '/api/gateway', title: '验证访问权限', description: '原子校验分钟、每日、每周与每月配额；超额时自动抵扣 credits。' },
-  { method: 'POST', path: '/api/redeem', title: '核销兑换码', description: '为当前账户添加用户组权益或 credits 增量包。' },
-  { method: 'GET', path: '/api/dashboard', title: '读取工作台', description: '返回当前账户、用量、权益和用户组摘要。' },
+  { method: 'POST', path: '/api/redeem', title: '核销兑换码', description: '为当前账户添加订阅计划权益或 credits 增量包。' },
+  { method: 'GET', path: '/api/dashboard', title: '读取工作台', description: '返回当前账户、用量、权益和订阅计划摘要。' },
 ]
 
 export function ApiDocs() {

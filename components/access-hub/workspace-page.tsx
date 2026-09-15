@@ -7,7 +7,7 @@ import { BookOpen, HeartHandshake, LayoutDashboard, LogOut, ReceiptText, Refresh
 import { AfdianMappings } from './afadian-mappings'
 import { AfdianOrders } from './afadian-orders'
 import { ApiDocs } from './api-docs'
-import { GroupManagement } from './group-management'
+import { SubscriptionPlanManagement } from './subscription-plans'
 import { Overview } from './overview'
 import { RedeemCodes } from './redeem-codes'
 import type { DashboardData } from './types'
@@ -15,14 +15,14 @@ import { useWorkspaceData } from './workspace-data'
 import { authClient } from '@/lib/auth-client'
 import { requestJson } from '@/lib/http-client'
 
-export type WorkspaceRoute = 'dashboard' | 'redeem' | 'codes' | 'codes-new' | 'groups' | 'groups-new' | 'groups-edit' | 'afdian' | 'afdian-new' | 'afdian-edit' | 'afdian-orders' | 'afdian-order-detail' | 'docs'
+export type WorkspaceRoute = 'dashboard' | 'redeem' | 'codes' | 'codes-new' | 'plans' | 'plans-new' | 'plans-edit' | 'afdian' | 'afdian-new' | 'afdian-edit' | 'afdian-orders' | 'afdian-order-detail' | 'docs'
 type Props = { route: WorkspaceRoute; resourceId?: string }
 type NavItem = { label: string; href: string; active: WorkspaceRoute[]; icon: typeof LayoutDashboard; admin?: boolean }
 const navItems: NavItem[] = [
   { label: '概览', href: '/dashboard', active: ['dashboard'], icon: LayoutDashboard },
   { label: '兑换权益', href: '/redeem-codes', active: ['redeem'], icon: Ticket },
   { label: '兑换码', href: '/admin/redeem-codes', active: ['codes', 'codes-new'], icon: Ticket, admin: true },
-  { label: '用户组', href: '/admin/groups', active: ['groups', 'groups-new', 'groups-edit'], icon: Users, admin: true },
+  { label: '订阅计划', href: '/admin/plans', active: ['plans', 'plans-new', 'plans-edit'], icon: Users, admin: true },
   { label: '爱发电映射', href: '/admin/afdian-mappings', active: ['afdian', 'afdian-new', 'afdian-edit'], icon: HeartHandshake, admin: true },
   { label: '爱发电订单', href: '/admin/afdian-orders', active: ['afdian-orders', 'afdian-order-detail'], icon: ReceiptText, admin: true },
   { label: 'API 文档', href: '/api-docs', active: ['docs'], icon: BookOpen },
@@ -31,10 +31,10 @@ const routeMeta: Record<WorkspaceRoute, { eyebrow: string; title: string; descri
   dashboard: { eyebrow: '工作台', title: '概览', description: '查看账户、访问权益与今天的 API 使用情况。' },
   redeem: { eyebrow: '权益中心', title: '兑换权益', description: '为当前账户核销兑换码并立即更新访问权益。' },
   codes: { eyebrow: '管理员', title: '兑换码', description: '查询、筛选并追踪已经生成的兑换码。', admin: true },
-  'codes-new': { eyebrow: '管理员 / 兑换码', title: '生成兑换码', description: '创建一批用户组权益或 credits 增量包兑换码。', admin: true },
-  groups: { eyebrow: '管理员', title: '用户组', description: '管理访问频率、周期配额与默认策略。', admin: true },
-  'groups-new': { eyebrow: '管理员 / 用户组', title: '新建用户组', description: '创建新的 API 访问策略。', admin: true },
-  'groups-edit': { eyebrow: '管理员 / 用户组', title: '编辑用户组', description: '调整当前用户组的访问能力。', admin: true },
+  'codes-new': { eyebrow: '管理员 / 兑换码', title: '生成兑换码', description: '创建一批订阅计划权益或 credits 增量包兑换码。', admin: true },
+  plans: { eyebrow: '管理员', title: '订阅计划', description: '管理访问频率、周期配额与默认策略。', admin: true },
+  'plans-new': { eyebrow: '管理员 / 订阅计划', title: '新建订阅计划', description: '创建新的 API 访问策略。', admin: true },
+  'plans-edit': { eyebrow: '管理员 / 订阅计划', title: '编辑订阅计划', description: '调整当前订阅计划的访问能力。', admin: true },
   afdian: { eyebrow: '管理员', title: '爱发电映射', description: '维护爱发电方案与本地权益之间的自动发码规则。', admin: true },
   'afdian-new': { eyebrow: '管理员 / 爱发电映射', title: '新增映射', description: '关联爱发电方案或 SKU 与本地权益。', admin: true },
   'afdian-edit': { eyebrow: '管理员 / 爱发电映射', title: '编辑映射', description: '修改现有爱发电权益映射。', admin: true },
@@ -75,12 +75,12 @@ export function WorkspacePage({ route, resourceId }: Props) {
 }
 
 function RouteContent({ route, resourceId, dashboard, loading, copied, refresh, signIn, copyId, router }: { route: WorkspaceRoute; resourceId?: string; dashboard: DashboardData | null; loading: boolean; copied: boolean; refresh: () => Promise<void>; signIn: () => Promise<void>; copyId: () => Promise<void>; router: ReturnType<typeof useRouter> }) {
-  const groups = dashboard?.groups ?? []
-  if (route === 'dashboard') return <Overview dashboard={dashboard} loading={loading} copied={copied} onCopyId={() => void copyId()} onNavigate={(view) => router.push(view === '兑换码' ? '/redeem-codes' : '/admin/groups')}/>
-  if (route === 'redeem') return <RedeemCodes authenticated isAdmin={false} groups={groups} onChanged={refresh} onSignIn={signIn} mode="redeem"/>
-  if (route === 'codes' || route === 'codes-new') return <RedeemCodes authenticated isAdmin groups={groups} onChanged={refresh} onSignIn={signIn} mode={route === 'codes' ? 'list' : 'new'}/>
-  if (route === 'groups' || route === 'groups-new' || route === 'groups-edit') return <GroupManagement groups={groups} onChanged={refresh} mode={route === 'groups' ? 'list' : route === 'groups-new' ? 'new' : 'edit'} groupId={resourceId}/>
-  if (route === 'afdian' || route === 'afdian-new' || route === 'afdian-edit') return <AfdianMappings groups={groups} mode={route === 'afdian' ? 'list' : route === 'afdian-new' ? 'new' : 'edit'} ruleId={resourceId}/>
+  const plans = dashboard?.plans ?? []
+  if (route === 'dashboard') return <Overview dashboard={dashboard} loading={loading} copied={copied} onCopyId={() => void copyId()} onNavigate={(view) => router.push(view === '兑换码' ? '/redeem-codes' : '/admin/plans')}/>
+  if (route === 'redeem') return <RedeemCodes authenticated isAdmin={false} plans={plans} onChanged={refresh} onSignIn={signIn} mode="redeem"/>
+  if (route === 'codes' || route === 'codes-new') return <RedeemCodes authenticated isAdmin plans={plans} onChanged={refresh} onSignIn={signIn} mode={route === 'codes' ? 'list' : 'new'}/>
+  if (route === 'plans' || route === 'plans-new' || route === 'plans-edit') return <SubscriptionPlanManagement plans={plans} onChanged={refresh} mode={route === 'plans' ? 'list' : route === 'plans-new' ? 'new' : 'edit'} planId={resourceId}/>
+  if (route === 'afdian' || route === 'afdian-new' || route === 'afdian-edit') return <AfdianMappings plans={plans} mode={route === 'afdian' ? 'list' : route === 'afdian-new' ? 'new' : 'edit'} mappingId={resourceId}/>
   if (route === 'afdian-orders' || route === 'afdian-order-detail') return <AfdianOrders mode={route === 'afdian-orders' ? 'list' : 'detail'} orderId={resourceId}/>
   return <ApiDocs/>
 }

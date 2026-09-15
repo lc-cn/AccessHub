@@ -1,19 +1,19 @@
 import type { EntitlementUnit, RedeemKind } from '@/lib/entitlements'
 
-export type AfdianBenefit = {
+export type MappedEntitlement = {
   kind: RedeemKind
-  groupId?: string
+  planId?: string
   credits?: number
   durationValue: number
   durationUnit: EntitlementUnit
   codesPerItem: number
 }
 
-export type AfdianBenefitRule = AfdianBenefit & { benefitKey: string; enabled: boolean }
+export type AfdianOfferMapping = MappedEntitlement & { offerKey: string; enabled: boolean }
 
 type AfdianOrderIdentity = {
   outTradeNo: string
-  planId: string
+  afdianPlanId: string
   skuIds: string[]
 }
 
@@ -24,19 +24,19 @@ const AFDIAN_WEBHOOK_PROBE = {
   planId: 'a45353328af911eb973052540025c377',
 } as const
 
-export function resolveAfdianBenefit(rules: AfdianBenefitRule[], planId: string, skuIds: string[]) {
-  const config = new Map(rules.filter((rule) => rule.enabled).map((rule) => [rule.benefitKey, rule]))
-  const key = skuIds.map((id) => `sku:${id}`).find((candidate) => config.has(candidate)) ?? (config.has(`plan:${planId}`) ? `plan:${planId}` : '')
+export function resolveAfdianOffer(mappings: AfdianOfferMapping[], afdianPlanId: string, skuIds: string[]) {
+  const config = new Map(mappings.filter((mapping) => mapping.enabled).map((mapping) => [mapping.offerKey, mapping]))
+  const key = skuIds.map((id) => `afdian-sku:${id}`).find((candidate) => config.has(candidate)) ?? (config.has(`afdian-plan:${afdianPlanId}`) ? `afdian-plan:${afdianPlanId}` : '')
   if (!key) return null
-  const { benefitKey: _, enabled: __, ...benefit } = config.get(key)!
+  const { offerKey: _, enabled: __, ...benefit } = config.get(key)!
   return { key, benefit }
 }
 
-export function resolveAfdianWebhookBenefit(rules: AfdianBenefitRule[], order: AfdianOrderIdentity) {
-  const resolved = resolveAfdianBenefit(rules, order.planId, order.skuIds)
+export function resolveAfdianWebhookOffer(mappings: AfdianOfferMapping[], order: AfdianOrderIdentity) {
+  const resolved = resolveAfdianOffer(mappings, order.afdianPlanId, order.skuIds)
   if (resolved) return { outcome: 'mapped' as const, resolved }
 
   const isProbe = order.outTradeNo === AFDIAN_WEBHOOK_PROBE.outTradeNo
-    && order.planId === AFDIAN_WEBHOOK_PROBE.planId
+    && order.afdianPlanId === AFDIAN_WEBHOOK_PROBE.planId
   return isProbe ? { outcome: 'probe' as const } : { outcome: 'unmapped' as const }
 }
