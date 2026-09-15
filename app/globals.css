@@ -160,6 +160,12 @@
   body {
     @apply bg-background text-foreground;
   }
+  button, a, input, select, textarea {
+    &:focus-visible {
+      outline: 2px solid #7893ee;
+      outline-offset: 2px;
+    }
+  }
 }
 
 @utility access-input {
@@ -175,5 +181,10 @@
   &:focus {
     border-color: #7893ee;
     box-shadow: 0 0 0 4px rgb(239 243 255);
+  }
+  &:disabled {
+    cursor: not-allowed;
+    background: rgb(248 250 252);
+    color: rgb(148 163 184);
   }
 }

@@ -12,11 +12,14 @@ import type { DashboardData } from '@/components/access-hub/types'
 import { authClient } from '@/lib/auth-client'
 
 type View = '概览' | '兑换码' | '用户组' | '爱发电' | 'API 文档'
+const viewSlugs: Record<View, string> = { '概览': 'overview', '兑换码': 'redeem', '用户组': 'groups', '爱发电': 'afdian', 'API 文档': 'api' }
+const slugViews = Object.fromEntries(Object.entries(viewSlugs).map(([view, slug]) => [slug, view])) as Record<string, View>
+const adminViews: View[] = ['用户组', '爱发电']
 const viewMeta: Record<View, { eyebrow: string; description: string }> = {
   '概览': { eyebrow: '工作台', description: '查看账户、访问权益与今天的 API 使用情况。' },
   '兑换码': { eyebrow: '权益中心', description: '核销兑换码；管理员可以在这里生成并追踪兑换码。' },
   '用户组': { eyebrow: '管理员', description: '配置用户组的频率、每日配额和默认策略。' },
-  '爱发电': { eyebrow: '管理员', description: '维护爱发电方案与用户组或 credits 权益之间的自动发码规则。' },
+  '爱发电': { eyebrow: '管理员', description: '维护爱发电方案与用户组或 credits 之间的自动到账规则。' },
   'API 文档': { eyebrow: '开发者', description: '查看当前可用接口及接入方式。' },
 }
 
@@ -48,6 +51,13 @@ export default function Page() {
 
   useEffect(() => { void loadDashboard() }, [loadDashboard])
 
+  useEffect(() => {
+    const syncView = () => setActive(slugViews[new URL(window.location.href).searchParams.get('view') || ''] || '概览')
+    syncView()
+    window.addEventListener('popstate', syncView)
+    return () => window.removeEventListener('popstate', syncView)
+  }, [])
+
   const signIn = async () => { await authClient.signIn.social({ provider: 'github', callbackURL: window.location.origin }) }
   const signOut = async () => {
     await authClient.signOut()
@@ -65,22 +75,37 @@ export default function Page() {
   const isAuthenticated = dashboard?.authenticated === true
   const isAdmin = user?.role === 'admin'
   const views: View[] = isAdmin ? ['概览', '兑换码', '用户组', '爱发电', 'API 文档'] : ['概览', '兑换码', 'API 文档']
+  const navigate = (view: View, replace = false) => {
+    setActive(view)
+    const url = new URL(window.location.href)
+    if (view === '概览') url.searchParams.delete('view')
+    else url.searchParams.set('view', viewSlugs[view])
+    window.history[replace ? 'replaceState' : 'pushState']({}, '', url)
+  }
 
-  return <div className="min-h-screen bg-[#f3f6fb] text-[#172033]">
+  useEffect(() => {
+    if (!loading && dashboard && !isAdmin && adminViews.includes(active)) navigate('概览', true)
+  // `navigate` only derives browser state and does not need a stable identity.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active, dashboard, isAdmin, loading])
+
+  useEffect(() => { document.title = `${active} · AccessHub` }, [active])
+
+  return <div className="min-h-screen bg-[#f3f6fb] text-[#172033]"><a href="#main-content" className="sr-only z-50 rounded-lg bg-white px-4 py-2 text-sm focus:not-sr-only focus:fixed focus:left-4 focus:top-4">跳到主要内容</a>
     <aside className="fixed inset-y-0 left-0 z-20 hidden w-64 border-r border-[#e3e9f3] bg-white px-5 py-6 lg:flex lg:flex-col">
       <Brand/>
-      <nav className="mt-10 space-y-1" aria-label="主导航">{views.map((view) => <NavButton key={view} view={view} active={active === view} onClick={() => setActive(view)}/>)}</nav>
+      <nav className="mt-10 space-y-1" aria-label="主导航">{views.map((view) => <NavButton key={view} view={view} active={active === view} onClick={() => navigate(view)}/>)}</nav>
       <div className="mt-auto rounded-[18px] bg-[#f4f6fa] p-3.5"><div className="flex items-center gap-3"><Avatar user={user}/><div className="min-w-0"><p className="truncate text-sm font-medium">{user?.name || '尚未登录'}</p><p className="mt-0.5 truncate text-[11px] text-slate-400">{isAdmin ? '管理员' : isAuthenticated ? '普通用户' : '登录后查看账户'}</p></div>{isAuthenticated && <button onClick={signOut} aria-label="退出登录" className="ml-auto rounded-lg p-2 text-slate-400 transition hover:bg-white hover:text-slate-600 active:translate-y-px"><LogOut size={15}/></button>}</div></div>
     </aside>
 
-    <main className="min-h-screen lg:pl-64">
+    <main id="main-content" className="min-h-screen lg:pl-64">
       <header className="sticky top-0 z-10 border-b border-[#e3e9f3] bg-white/90 backdrop-blur-xl"><div className="flex h-[76px] items-center justify-between px-5 sm:px-8 lg:px-10"><div><p className="text-[11px] font-medium tracking-[.12em] text-slate-400">{viewMeta[active].eyebrow}</p><h1 className="mt-1 text-xl font-semibold tracking-tight">{active}</h1></div><div className="flex items-center gap-2 sm:gap-3"><span className="mr-2 hidden items-center gap-2 text-xs text-slate-500 sm:flex"><span className={`size-2 rounded-full ${dashboardError ? 'bg-rose-500' : loading ? 'bg-amber-400' : 'bg-emerald-500'}`}/>{dashboardError ? '同步失败' : loading ? '同步中' : '数据已同步'}</span><button onClick={() => void loadDashboard()} disabled={loading} aria-label="刷新数据" className="grid size-9 place-items-center rounded-xl border border-slate-200 text-slate-500 transition hover:border-slate-300 hover:bg-slate-50 active:translate-y-px disabled:opacity-50"><RefreshCw size={15} className={loading ? 'animate-spin' : ''}/></button><div className="lg:hidden"><Avatar user={user}/></div></div></div>
-        <nav className="flex gap-1 overflow-x-auto px-5 pb-3 lg:hidden" aria-label="移动端导航">{views.map((view) => <button key={view} onClick={() => setActive(view)} className={`shrink-0 rounded-lg px-3 py-1.5 text-xs font-medium transition ${active === view ? 'bg-[#182238] text-white' : 'text-slate-500'}`}>{view}</button>)}</nav>
+        <nav className="flex gap-1 overflow-x-auto px-5 pb-3 lg:hidden" aria-label="移动端导航">{views.map((view) => <button key={view} aria-current={active === view ? 'page' : undefined} onClick={() => navigate(view)} className={`shrink-0 rounded-lg px-3 py-1.5 text-xs font-medium transition focus-visible:ring-2 focus-visible:ring-[#7893ee] ${active === view ? 'bg-[#182238] text-white' : 'text-slate-500'}`}>{view}</button>)}</nav>
       </header>
 
       <div className="mx-auto max-w-[1320px] px-5 pb-14 pt-8 sm:px-8 lg:px-10 lg:pt-10">
         <div className="mb-8"><p className="max-w-2xl text-sm leading-6 text-slate-500">{viewMeta[active].description}</p>{dashboardError && <button onClick={() => void loadDashboard()} className="mt-3 rounded-lg bg-rose-50 px-3 py-2 text-xs text-rose-600">{dashboardError} 点击重试</button>}</div>
-        {active === '概览' && <Overview dashboard={dashboard} loading={loading} copied={copied} onCopyId={() => void copyId()} onNavigate={setActive}/>}
+        {active === '概览' && <Overview dashboard={dashboard} loading={loading} copied={copied} onCopyId={() => void copyId()} onNavigate={(view) => navigate(view)}/>}
         {active === '兑换码' && <RedeemCodes authenticated={isAuthenticated} isAdmin={isAdmin} groups={dashboard?.groups ?? []} onChanged={loadDashboard} onSignIn={signIn}/>}
         {active === '用户组' && isAdmin && <GroupManagement groups={dashboard?.groups ?? []} onChanged={loadDashboard}/>}
         {active === '爱发电' && isAdmin && <AfdianMappings groups={dashboard?.groups ?? []}/>}
@@ -96,5 +121,5 @@ function Avatar({ user }: { user: DashboardData['user'] }) { return <span classN
 
 function NavButton({ view, active, onClick }: { view: View; active: boolean; onClick: () => void }) {
   const Icon = view === '概览' ? LayoutDashboard : view === '兑换码' ? Ticket : view === '用户组' ? Users : view === '爱发电' ? HeartHandshake : BookOpen
-  return <button onClick={onClick} className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-sm transition active:translate-y-px ${active ? 'bg-[#edf2ff] font-medium text-[#3157d5]' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'}`}><Icon size={17}/>{view}</button>
+  return <button onClick={onClick} aria-current={active ? 'page' : undefined} className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-sm transition focus-visible:ring-2 focus-visible:ring-[#7893ee] active:translate-y-px ${active ? 'bg-[#edf2ff] font-medium text-[#3157d5]' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'}`}><Icon size={17}/>{view}</button>
 }

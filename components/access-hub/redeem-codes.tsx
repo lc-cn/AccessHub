@@ -1,8 +1,9 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Check, Copy, KeyRound, Search, Sparkles, TicketCheck } from 'lucide-react'
+import { Check, Copy, Download, KeyRound, Search, Sparkles, TicketCheck } from 'lucide-react'
 import type { AdminData, DashboardGroup, RedeemCode } from './types'
+import { requestJson } from '@/lib/http-client'
 
 type StatusFilter = '全部' | '可使用' | '已核销' | '已过期'
 
@@ -12,6 +13,7 @@ export function RedeemCodes({ authenticated, isAdmin, groups, onChanged, onSignI
   const [redeemNotice, setRedeemNotice] = useState<{ tone: 'error' | 'success'; text: string } | null>(null)
   const [adminData, setAdminData] = useState<AdminData | null>(null)
   const [adminError, setAdminError] = useState('')
+  const [adminLoading, setAdminLoading] = useState(false)
   const [generating, setGenerating] = useState(false)
   const [generated, setGenerated] = useState<string[]>([])
   const [generator, setGenerator] = useState({ kind: 'group' as 'group' | 'credits', groupId: '', credits: '1000', count: '10', durationValue: '1', durationUnit: 'month' as 'day' | 'month' | 'quarter' | 'year' })
@@ -21,12 +23,14 @@ export function RedeemCodes({ authenticated, isAdmin, groups, onChanged, onSignI
 
   const loadAdmin = useCallback(async () => {
     if (!isAdmin) return
-    const response = await fetch('/api/admin', { cache: 'no-store' })
-    if (!response.ok) return setAdminError('兑换码台账读取失败，请稍后重试')
-    const data: AdminData = await response.json()
-    setAdminData(data)
-    setGenerator((current) => ({ ...current, groupId: current.groupId || data.groups[0]?.id || '' }))
-    setAdminError('')
+    setAdminLoading(true)
+    try {
+      const data = await requestJson<AdminData>('/api/admin?section=codes', { cache: 'no-store' })
+      setAdminData(data)
+      setGenerator((current) => ({ ...current, groupId: current.groupId || data.groups[0]?.id || '' }))
+      setAdminError('')
+    } catch (error) { setAdminError(error instanceof Error ? error.message : '兑换码台账读取失败，请稍后重试') }
+    finally { setAdminLoading(false) }
   }, [isAdmin])
 
   useEffect(() => { void loadAdmin() }, [loadAdmin])
@@ -36,29 +40,26 @@ export function RedeemCodes({ authenticated, isAdmin, groups, onChanged, onSignI
     if (!code.trim()) return setRedeemNotice({ tone: 'error', text: '请输入兑换码' })
     setRedeeming(true)
     setRedeemNotice(null)
-    const response = await fetch('/api/redeem', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code }) })
-    const result = await response.json().catch(() => ({}))
-    if (response.ok) {
+    try {
+      const result = await requestJson<{ kind: 'credits' | 'group'; credits?: number; group?: string }>('/api/redeem', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code }) })
       setRedeemNotice({ tone: 'success', text: result.kind === 'credits' ? `已增加 ${Number(result.credits).toLocaleString()} credits` : `已加入「${result.group}」，权益立即生效` })
       setCode('')
       await Promise.all([onChanged(), loadAdmin()])
-    } else setRedeemNotice({ tone: 'error', text: result.error || '核销失败，请检查兑换码' })
-    setRedeeming(false)
+    } catch (error) { setRedeemNotice({ tone: 'error', text: error instanceof Error ? error.message : '核销失败，请检查兑换码' }) }
+    finally { setRedeeming(false) }
   }
 
   const generate = async () => {
     if (generator.kind === 'group' && !generator.groupId) return setAdminError('请先选择用户组')
     setGenerating(true)
     setGenerated([])
-    const response = await fetch('/api/admin', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ type: 'codes', ...generator }) })
-    const result = await response.json().catch(() => ({}))
-    if (!response.ok) setAdminError(result.error || '生成失败，请检查配置')
-    else {
+    try {
+      const result = await requestJson<{ codes: string[] }>('/api/admin', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ type: 'codes', ...generator }) })
       setGenerated(result.codes)
       setAdminError('')
       await loadAdmin()
-    }
-    setGenerating(false)
+    } catch (error) { setAdminError(error instanceof Error ? error.message : '生成失败，请检查配置') }
+    finally { setGenerating(false) }
   }
 
   const statusOf = (item: RedeemCode): Exclude<StatusFilter, '全部'> => item.redeemedAt ? '已核销' : item.expiresAt && new Date(item.expiresAt) < new Date() ? '已过期' : '可使用'
@@ -72,6 +73,18 @@ export function RedeemCodes({ authenticated, isAdmin, groups, onChanged, onSignI
     await navigator.clipboard?.writeText(value)
     setCopied(key)
     setTimeout(() => setCopied(''), 1500)
+  }
+
+  const downloadGenerated = () => {
+    const blob = new Blob([`${generated.join('\n')}\n`], { type: 'text/plain;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `accesshub-codes-${new Date().toISOString().slice(0, 10)}.txt`
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    URL.revokeObjectURL(url)
   }
 
   return <div className="space-y-7">
@@ -94,12 +107,12 @@ export function RedeemCodes({ authenticated, isAdmin, groups, onChanged, onSignI
       <div><p className="text-xs font-medium tracking-wide text-[#3157d5]">管理员工具</p><h2 className="mt-1 text-2xl font-semibold tracking-tight">兑换码管理</h2><p className="mt-2 text-sm text-slate-500">批量生成、复制和追踪最近 200 个兑换码。</p></div>
       <div className="grid gap-6 xl:grid-cols-[360px_1fr]">
         <aside className="h-fit rounded-[22px] bg-white p-6 shadow-[0_18px_55px_rgba(39,55,92,.06)]"><div className="flex items-center gap-3"><span className="grid size-9 place-items-center rounded-xl bg-[#edf2ff] text-[#3157d5]"><Sparkles size={17}/></span><div><h3 className="font-semibold">批量生成</h3><p className="text-xs text-slate-400">用户组权益或 credits 增量包</p></div></div><div className="mt-6 space-y-4"><Field label="权益类型"><select value={generator.kind} onChange={(event) => setGenerator({ ...generator, kind: event.target.value as 'group' | 'credits' })} className="access-input"><option value="group">用户组权益</option><option value="credits">credits 增量包</option></select></Field>{generator.kind === 'group' ? <Field label="权益用户组"><select value={generator.groupId} onChange={(event) => setGenerator({ ...generator, groupId: event.target.value })} className="access-input">{groups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}</select></Field> : <Field label="每码 credits"><input type="number" min="1" value={generator.credits} onChange={(event) => setGenerator({ ...generator, credits: event.target.value })} className="access-input tabular-nums"/></Field>}<div className="grid grid-cols-2 gap-3"><Field label="生成数量"><input type="number" min="1" max="1000" value={generator.count} onChange={(event) => setGenerator({ ...generator, count: event.target.value })} className="access-input tabular-nums"/></Field><Field label="权益时长"><input type="number" min="-1" value={generator.durationValue} onChange={(event) => setGenerator({ ...generator, durationValue: event.target.value })} className="access-input tabular-nums" placeholder="-1 为永久"/></Field></div><Field label="权益周期"><select value={generator.durationUnit} disabled={generator.durationValue === '-1'} onChange={(event) => setGenerator({ ...generator, durationUnit: event.target.value as typeof generator.durationUnit })} className="access-input"><option value="day">天</option><option value="month">月</option><option value="quarter">季</option><option value="year">年</option></select></Field><p className="text-[11px] leading-5 text-slate-400">权益时长填 -1 表示永久；credits 会在基础用量达到限制后自动抵扣。</p><button onClick={() => void generate()} disabled={generating || (generator.kind === 'group' && groups.length === 0)} className="h-11 w-full rounded-xl bg-[#3157d5] text-sm font-medium text-white transition hover:bg-[#284bc2] active:translate-y-px disabled:opacity-50">{generating ? '生成中…' : '生成兑换码'}</button>{adminError && <p className="text-xs text-rose-600">{adminError}</p>}</div>
-          {generated.length > 0 && <div className="mt-5 rounded-xl bg-[#f5f7fb] p-4"><div className="flex items-center justify-between"><p className="text-xs font-medium text-slate-600">本次生成 {generated.length} 个</p><button onClick={() => void copy(generated.join('\n'), 'batch')} className="flex items-center gap-1 text-xs text-[#3157d5]">{copied === 'batch' ? <Check size={13}/> : <Copy size={13}/>}复制全部</button></div><p className="mt-3 truncate font-mono text-xs text-slate-400">{generated[0]}</p></div>}
+          {generated.length > 0 && <div className="mt-5 rounded-xl bg-[#f5f7fb] p-4"><div className="flex items-center justify-between gap-3"><p className="text-xs font-medium text-slate-600">本次生成 {generated.length} 个</p><div className="flex items-center gap-2"><button onClick={downloadGenerated} className="flex items-center gap-1 text-xs text-slate-500"><Download size={13}/>下载</button><button onClick={() => void copy(generated.join('\n'), 'batch')} className="flex items-center gap-1 text-xs text-[#3157d5]">{copied === 'batch' ? <Check size={13}/> : <Copy size={13}/>}复制全部</button></div></div><p className="mt-3 truncate font-mono text-xs text-slate-400">{generated[0]}</p></div>}
         </aside>
 
         <div className="min-w-0 rounded-[22px] bg-white shadow-[0_18px_55px_rgba(39,55,92,.06)]"><div className="flex flex-col gap-4 border-b border-slate-100 p-5 sm:flex-row sm:items-center sm:justify-between"><div className="flex gap-5"><MiniMetric value={counts.total} label="总计"/><MiniMetric value={counts.available} label="可使用"/><MiniMetric value={counts.redeemed} label="已核销"/></div><label className="flex h-10 items-center gap-2 rounded-xl bg-[#f5f7fb] px-3 text-slate-400 focus-within:ring-2 focus-within:ring-blue-100"><Search size={15}/><input value={query} onChange={(event) => setQuery(event.target.value)} className="w-full bg-transparent text-xs text-slate-700 outline-none" placeholder="搜索兑换码或用户组"/></label></div>
           <div className="flex gap-1 overflow-x-auto px-5 py-3">{(['全部', '可使用', '已核销', '已过期'] as StatusFilter[]).map((item) => <button key={item} onClick={() => setFilter(item)} className={`rounded-lg px-3 py-1.5 text-xs transition ${filter === item ? 'bg-[#182238] text-white' : 'text-slate-500 hover:bg-slate-50'}`}>{item}</button>)}</div>
-          <div className="overflow-x-auto"><table className="w-full min-w-[680px] text-left"><thead><tr className="border-y border-slate-100 text-[11px] font-medium text-slate-400"><th className="px-5 py-3">兑换码</th><th className="px-4 py-3">权益类型</th><th className="px-4 py-3">周期</th><th className="px-4 py-3">状态</th><th className="px-5 py-3 text-right">创建时间</th></tr></thead><tbody>{visibleCodes.map((item) => { const status = statusOf(item); return <tr key={item.id} className="border-b border-slate-50 text-xs last:border-0 hover:bg-slate-50/70"><td className="px-5 py-3.5"><button onClick={() => void copy(item.code)} className="flex items-center gap-2 font-mono text-slate-700 hover:text-[#3157d5]">{item.code}{copied === item.code ? <Check size={12}/> : <Copy size={12} className="text-slate-300"/>}</button></td><td className="px-4 py-3.5 text-slate-600">{item.kind === 'credits' ? `${item.credits?.toLocaleString()} credits` : item.groupName}</td><td className="px-4 py-3.5 text-slate-500">{durationText(item.durationValue, item.durationUnit)}</td><td className="px-4 py-3.5"><StatusBadge status={status}/></td><td className="px-5 py-3.5 text-right text-slate-400">{new Intl.DateTimeFormat('zh-CN').format(new Date(item.createdAt))}</td></tr>})}</tbody></table>{visibleCodes.length === 0 && <div className="px-5 py-12 text-center text-sm text-slate-400">没有符合条件的兑换码</div>}</div>
+          <div className="overflow-x-auto">{adminLoading && !adminData ? <div className="space-y-2 p-5">{[1, 2, 3, 4].map((item) => <div key={item} className="h-11 animate-pulse rounded-lg bg-slate-50"/>)}</div> : <><table className="w-full min-w-[680px] text-left"><thead><tr className="border-y border-slate-100 text-[11px] font-medium text-slate-400"><th className="px-5 py-3">兑换码</th><th className="px-4 py-3">权益类型</th><th className="px-4 py-3">周期</th><th className="px-4 py-3">状态</th><th className="px-5 py-3 text-right">创建时间</th></tr></thead><tbody>{visibleCodes.map((item) => { const status = statusOf(item); return <tr key={item.id} className="border-b border-slate-50 text-xs last:border-0 hover:bg-slate-50/70"><td className="px-5 py-3.5"><button onClick={() => void copy(item.code)} className="flex items-center gap-2 font-mono text-slate-700 hover:text-[#3157d5]">{item.code}{copied === item.code ? <Check size={12}/> : <Copy size={12} className="text-slate-300"/>}</button></td><td className="px-4 py-3.5 text-slate-600">{item.kind === 'credits' ? `${item.credits?.toLocaleString()} credits` : item.groupName}</td><td className="px-4 py-3.5 text-slate-500">{durationText(item.durationValue, item.durationUnit)}</td><td className="px-4 py-3.5"><StatusBadge status={status}/></td><td className="px-5 py-3.5 text-right text-slate-400">{new Intl.DateTimeFormat('zh-CN').format(new Date(item.createdAt))}</td></tr>})}</tbody></table>{visibleCodes.length === 0 && <div className="px-5 py-12 text-center text-sm text-slate-400">没有符合条件的兑换码</div>}</>}</div>
         </div>
       </div>
     </section>}
