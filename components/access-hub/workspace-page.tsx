@@ -35,7 +35,7 @@ const routeMeta: Record<WorkspaceRoute, { eyebrow: string; title: string; descri
   groups: { eyebrow: '管理员', title: '用户组', description: '管理访问频率、周期配额与默认策略。', admin: true },
   'groups-new': { eyebrow: '管理员 / 用户组', title: '新建用户组', description: '创建新的 API 访问策略。', admin: true },
   'groups-edit': { eyebrow: '管理员 / 用户组', title: '编辑用户组', description: '调整当前用户组的访问能力。', admin: true },
-  afdian: { eyebrow: '管理员', title: '爱发电映射', description: '维护爱发电方案与本地权益之间的自动到账规则。', admin: true },
+  afdian: { eyebrow: '管理员', title: '爱发电映射', description: '维护爱发电方案与本地权益之间的自动发码规则。', admin: true },
   'afdian-new': { eyebrow: '管理员 / 爱发电映射', title: '新增映射', description: '关联爱发电方案或 SKU 与本地权益。', admin: true },
   'afdian-edit': { eyebrow: '管理员 / 爱发电映射', title: '编辑映射', description: '修改现有爱发电权益映射。', admin: true },
   'afdian-orders': { eyebrow: '管理员', title: '爱发电订单', description: '追踪订单、兑换码、私信送达和核销状态。', admin: true },
