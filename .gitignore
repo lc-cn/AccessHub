@@ -8,7 +8,7 @@ __v0_jsx-dev-runtime.ts
 
 # Environment variables
 .env*.local
-
+deploy.sh
 # Common ignores
 node_modules
 .next/
