@@ -99,7 +99,10 @@ export async function POST(request: Request) {
     durationUnit: mapping.durationUnit as EntitlementUnit,
     codesPerItem: mapping.codesPerItem,
   })), { outTradeNo, afdianPlanId, skuIds })
-  if (resolution.outcome === 'probe') return response(200, 'ok', { probe: true })
+  if (resolution.outcome === 'probe') {
+    await db.update(providerEvents).set({ status: 'ignored', processedAt: new Date(), error: null }).where(eq(providerEvents.id, providerEvent.id))
+    return response(200, 'ok', { probe: true })
+  }
   if (resolution.outcome === 'unmapped') {
     await db.update(providerEvents).set({ status: 'failed', error: 'no valid offer mapping', processedAt: new Date() }).where(eq(providerEvents.id, providerEvent.id))
     return response(422, 'no valid Afdian offer mapping for this plan or sku')
@@ -108,7 +111,10 @@ export async function POST(request: Request) {
 
   const itemCount = skuDetails.length ? skuDetails.reduce((total, item) => total + Math.max(0, Number(item.count) || 0), 0) : 1
   const codeCount = Math.max(1, itemCount) * resolved.benefit.codesPerItem
-  if (codeCount > 1000) return response(422, 'order would generate more than 1000 codes')
+  if (codeCount > 1000) {
+    await db.update(providerEvents).set({ status: 'failed', error: 'order would generate more than 1000 codes', processedAt: new Date() }).where(eq(providerEvents.id, providerEvent.id))
+    return response(422, 'order would generate more than 1000 codes')
+  }
 
   try {
     const fulfillment = await db.transaction(async (tx) => {

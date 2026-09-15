@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { and, eq, gt, isNull, or, sql } from 'drizzle-orm'
+import { and, eq, gt, inArray, isNull, lte, or, sql } from 'drizzle-orm'
 import { db } from '@/lib/db'
 import { activityLogs, planEntitlements, subscriptionEvents, subscriptions } from '@/lib/db/schema'
 import { assertSubscriptionTransition, type SubscriptionStatus } from '@/lib/subscription-state'
@@ -58,4 +58,17 @@ export async function transitionSubscription(tx: Transaction, input: Subscriptio
   await tx.insert(subscriptionEvents).values({ id: randomUUID(), subscriptionId: input.subscriptionId, type: input.eventType, fromStatus, toStatus: input.toStatus, providerEventId: input.providerEventId || null, detail: input.detail || '' })
   if (input.actorId) await tx.insert(activityLogs).values({ id: randomUUID(), actorId: input.actorId, action: 'subscription.transitioned', resourceType: 'subscription', resourceId: input.subscriptionId, detail: `${fromStatus} -> ${input.toStatus}` })
   return updated
+}
+
+export async function expireDueSubscriptions(now = new Date()) {
+  return db.transaction(async (tx) => {
+    const due = await tx.select({ id: subscriptions.id }).from(subscriptions).where(and(
+      inArray(subscriptions.status, ['trialing', 'active', 'past_due', 'paused']),
+      lte(subscriptions.currentPeriodEnd, now),
+    )).limit(500)
+    for (const subscription of due) {
+      await transitionSubscription(tx, { subscriptionId: subscription.id, toStatus: 'expired', eventType: 'period_ended', detail: 'automatic reconciliation' })
+    }
+    return due.length
+  })
 }

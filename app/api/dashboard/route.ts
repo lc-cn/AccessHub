@@ -9,6 +9,7 @@ import { AFDIAN_PROVIDER_ID, isAfdianOAuthConfigured } from '@/lib/afdian-oauth'
 import { afdianCheckoutUrl } from '@/lib/afdian-commerce'
 import { countEffectivePlanSubscribers } from '@/lib/plan-subscriber-counts'
 import { usagePeriodKeys } from '@/lib/usage-periods'
+import { expireDueSubscriptions } from '@/lib/subscription-service'
 
 export async function GET() {
   const session = await auth.api.getSession({ headers: await headers() })
@@ -16,6 +17,7 @@ export async function GET() {
   const { today, weekStart, monthStart } = usagePeriodKeys()
   const dashboardPlans = alias(subscriptionPlans, 'dashboard_subscription_plans')
   const now = new Date()
+  await expireDueSubscriptions(now)
   const activeAnyEntitlement = and(
     lte(planEntitlements.startsAt, now),
     or(isNull(planEntitlements.expiresAt), gt(planEntitlements.expiresAt, now)),

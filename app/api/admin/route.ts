@@ -9,7 +9,7 @@ import { db } from '@/lib/db'
 import { activityLogs, orders, payments, providerEvents, providerOfferMappings, redeemCodes, skus, subscriptionPlans, subscriptions, user } from '@/lib/db/schema'
 import { legacyDurationDays, parsePositiveInteger } from '@/lib/entitlements'
 import { subscriptionStatuses, type SubscriptionStatus } from '@/lib/subscription-state'
-import { transitionSubscription } from '@/lib/subscription-service'
+import { expireDueSubscriptions, transitionSubscription } from '@/lib/subscription-service'
 
 async function requireAdmin() {
   const session = await auth.api.getSession({ headers: await headers() })
@@ -26,6 +26,7 @@ async function requireAdmin() {
 
 export async function GET(request: Request) {
   if (!(await requireAdmin())) return NextResponse.json({ error: '无权访问' }, { status: 403 })
+  await expireDueSubscriptions()
   const section = new URL(request.url).searchParams.get('section') || 'all'
   const wants = (...names: string[]) => section === 'all' || names.includes(section)
   const [plans, codes, mappings, orderRows, skuRows, users, logs] = await Promise.all([
