@@ -3,7 +3,7 @@ import { eq, and, gt, isNull, or } from 'drizzle-orm'
 import { randomUUID } from 'crypto'
 import { auth } from '@/lib/auth'
 import { db } from '@/lib/db'
-import { activityLogs, creditGrants, orders, planEntitlements, redeemCodes, subscriptionEvents, subscriptionPlans, subscriptions } from '@/lib/db/schema'
+import { activityLogs, creditGrants, creditTransactions, orders, planEntitlements, redeemCodes, subscriptionEvents, subscriptionPlans, subscriptions } from '@/lib/db/schema'
 import { headers } from 'next/headers'
 import { entitlementExpiresAt, type EntitlementUnit } from '@/lib/entitlements'
 import { transitionSubscription } from '@/lib/subscription-service'
@@ -26,7 +26,9 @@ export async function POST(request: Request) {
     const expiresAt = entitlementExpiresAt(now, item.durationValue, item.durationUnit as EntitlementUnit)
     if (item.kind === 'credits') {
       if (!item.credits) throw new Error('credits redeem code has no credits')
-      await tx.insert(creditGrants).values({ id: randomUUID(), userId: session.user.id, credits: item.credits, remainingCredits: item.credits, expiresAt, source: 'redeem', redeemCodeId: item.id })
+      const grantId = randomUUID()
+      await tx.insert(creditGrants).values({ id: grantId, userId: session.user.id, credits: item.credits, remainingCredits: item.credits, expiresAt, source: 'redeem', redeemCodeId: item.id })
+      await tx.insert(creditTransactions).values({ id: randomUUID(), userId: session.user.id, creditGrantId: grantId, delta: item.credits, balanceAfter: item.credits, reason: 'redeem', referenceId: item.id })
       await tx.insert(activityLogs).values({ id: randomUUID(), actorId: session.user.id, action: 'code.redeemed', resourceType: 'redeem_code', resourceId: item.id, detail: `${item.credits} credits` })
       return NextResponse.json({ ok: true, kind: 'credits', credits: item.credits, expiresAt: expiresAt?.toISOString() ?? null })
     }

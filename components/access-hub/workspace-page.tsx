@@ -23,6 +23,7 @@ type NavItem = { label: string; href: string; active: WorkspaceRoute[]; icon: ty
 const navItems: NavItem[] = [
   { label: '概览', href: '/dashboard', active: ['dashboard'], icon: LayoutDashboard },
   { label: '兑换权益', href: '/redeem-codes', active: ['redeem'], icon: Ticket },
+  { label: '个人中心', href: '/account', active: [], icon: UserRound },
   { label: '兑换码', href: '/admin/redeem-codes', active: ['codes', 'codes-new'], icon: Ticket, admin: true },
   { label: '订阅计划', href: '/admin/plans', active: ['plans', 'plans-new', 'plans-edit'], icon: Users, admin: true },
   { label: 'SKU', href: '/admin/skus', active: ['skus', 'skus-new', 'skus-edit'], icon: Boxes, admin: true },

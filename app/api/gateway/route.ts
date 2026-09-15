@@ -4,7 +4,7 @@ import { headers } from 'next/headers'
 import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { db } from '@/lib/db'
-import { apiUsage, creditGrants, planEntitlements, subscriptionPlans } from '@/lib/db/schema'
+import { apiUsage, creditGrants, creditTransactions, planEntitlements, subscriptionPlans } from '@/lib/db/schema'
 import { retryAfterSeconds, usagePeriodKeys } from '@/lib/usage-periods'
 import { selectAllowance, type UsageSnapshot } from '@/lib/usage-allowance'
 
@@ -67,6 +67,7 @@ export async function POST() {
         .orderBy(sql`${creditGrants.expiresAt} asc nulls last`, creditGrants.createdAt).limit(1)
       if (!grant) return NextResponse.json({ error: 'usage_limit_exceeded', period: lastExceeded?.period, limit: lastExceeded?.limit, used: lastExceeded?.used, creditsRemaining: 0, retryAfterSeconds: lastExceeded ? retryAfterSeconds(lastExceeded.period, now, lastWindowStartedAt) : undefined }, { status: 429 })
       await tx.update(creditGrants).set({ remainingCredits: grant.remainingCredits - 1 }).where(eq(creditGrants.id, grant.id))
+      await tx.insert(creditTransactions).values({ id: randomUUID(), userId: session.user.id, creditGrantId: grant.id, delta: -1, balanceAfter: grant.remainingCredits - 1, reason: 'api_usage' })
       creditUsed = true
     } else {
       const { todayUsage } = selected.snapshot

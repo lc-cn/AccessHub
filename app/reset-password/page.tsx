@@ -1,0 +1,5 @@
+import { Suspense } from 'react'
+import { KeyRound, Zap } from 'lucide-react'
+import { ResetPasswordForm } from '@/components/account/reset-password-form'
+
+export default function ResetPasswordPage() { return <main className="grid min-h-dvh place-items-center bg-[#f3f6fb] px-5 py-12"><div className="w-full max-w-md"><div className="mb-8 flex items-center justify-center gap-3"><span className="grid size-10 place-items-center rounded-xl bg-[#3157d5] text-white"><Zap size={18} fill="currentColor"/></span><strong>AccessHub</strong></div><section className="rounded-[22px] border border-[#e5eaf2] bg-white p-7 shadow-[0_20px_60px_rgba(38,55,89,.08)]"><span className="grid size-11 place-items-center rounded-xl bg-blue-50 text-[#3157d5]"><KeyRound size={19}/></span><h1 className="mt-5 text-2xl font-semibold tracking-tight">设置新密码</h1><p className="mb-6 mt-2 text-sm leading-6 text-slate-500">新密码保存后，旧密码将立即失效。</p><Suspense fallback={<p className="text-sm text-slate-400">正在验证链接…</p>}><ResetPasswordForm/></Suspense></section></div></main> }
