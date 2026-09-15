@@ -1,7 +1,3 @@
 export default function AccountLoading() {
-  return (
-    <div className="min-h-screen bg-[#f3f6fb] flex items-center justify-center">
-      <div className="animate-pulse text-sm text-slate-400">正在加载账户信息…</div>
-    </div>
-  )
+  return <div className="animate-pulse"><div className="h-3 w-28 rounded bg-blue-100"/><div className="mt-4 h-9 w-56 rounded-lg bg-slate-200"/><div className="mt-3 h-4 w-full max-w-lg rounded bg-slate-200/70"/><div className="mt-9 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">{[1, 2, 3, 4].map((item) => <div key={item} className="h-28 rounded-[20px] bg-white ring-1 ring-slate-100"/>)}</div><div className="mt-6 grid gap-6 lg:grid-cols-[1.15fr_.85fr]"><div className="h-72 rounded-[20px] bg-white ring-1 ring-slate-100"/><div className="h-72 rounded-[20px] bg-white ring-1 ring-slate-100"/></div><span className="sr-only">正在加载账户信息</span></div>
 }

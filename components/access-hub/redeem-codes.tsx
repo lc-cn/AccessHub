@@ -23,6 +23,14 @@ export function RedeemCodes({ authenticated, isAdmin, skus, onChanged, onSignIn,
   const [filter, setFilter] = useState<StatusFilter>('全部')
   const [copied, setCopied] = useState('')
 
+  useEffect(() => {
+    if (mode !== 'redeem') return
+    const pendingCode = sessionStorage.getItem('accesshub:pending-redeem-code')
+    if (!pendingCode) return
+    setCode(pendingCode)
+    sessionStorage.removeItem('accesshub:pending-redeem-code')
+  }, [mode])
+
   const loadAdmin = useCallback(async () => {
     if (!isAdmin || mode === 'redeem') return
     setAdminLoading(true)

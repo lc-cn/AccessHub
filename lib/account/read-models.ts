@@ -1,5 +1,6 @@
-import { and, desc, eq, gte, gt, isNull, lte, or, sql } from 'drizzle-orm'
+import { and, desc, eq, gte, gt, isNull, lt, lte, or, sql } from 'drizzle-orm'
 import { db } from '@/lib/db'
+import { AFDIAN_PROVIDER_ID } from '@/lib/afdian-oauth'
 import {
   account,
   apiUsage,
@@ -31,7 +32,7 @@ export async function getAccountProfile(userId: string) {
 
 export async function getAccountOverview(userId: string) {
   const now = new Date()
-  const [profile, [activePlan], [credits], [orderCount]] = await Promise.all([
+  const [profile, [activeEntitlement], [defaultPlan], [credits], [orderCount]] = await Promise.all([
     getAccountProfile(userId),
     db.select({
       name: subscriptionPlans.name,
@@ -44,12 +45,19 @@ export async function getAccountOverview(userId: string) {
       .where(and(eq(planEntitlements.userId, userId), lte(planEntitlements.startsAt, now), or(isNull(planEntitlements.expiresAt), gt(planEntitlements.expiresAt, now))))
       .orderBy(desc(subscriptionPlans.rank), desc(planEntitlements.startsAt))
       .limit(1),
+    db.select({
+      name: subscriptionPlans.name,
+      description: subscriptionPlans.description,
+      expiresAt: sql<Date | null>`null`,
+      dailyLimit: subscriptionPlans.dailyLimit,
+      monthlyLimit: subscriptionPlans.monthlyLimit,
+    }).from(subscriptionPlans).where(eq(subscriptionPlans.isDefault, true)).limit(1),
     db.select({ total: sql<number>`coalesce(sum(${creditGrants.remainingCredits}), 0)::int`.mapWith(Number) })
       .from(creditGrants)
       .where(and(eq(creditGrants.userId, userId), gt(creditGrants.remainingCredits, 0), or(isNull(creditGrants.expiresAt), gt(creditGrants.expiresAt, now)))),
     db.select({ total: sql<number>`count(*)::int`.mapWith(Number) }).from(orders).where(eq(orders.userId, userId)),
   ])
-  return { profile, activePlan: activePlan ?? null, creditsRemaining: credits?.total ?? 0, orderCount: orderCount?.total ?? 0 }
+  return { profile, activePlan: activeEntitlement ?? defaultPlan ?? null, creditsRemaining: credits?.total ?? 0, orderCount: orderCount?.total ?? 0 }
 }
 
 export async function getAccountSecurity(userId: string, currentSessionId: string) {
@@ -69,7 +77,7 @@ export async function getAccountSecurity(userId: string, currentSessionId: strin
 
 export async function getAccountEntitlements(userId: string) {
   const now = new Date()
-  const [plans, credits] = await Promise.all([
+  const [plans, [defaultPlan], credits] = await Promise.all([
     db.select({
       id: planEntitlements.id,
       planName: subscriptionPlans.name,
@@ -85,11 +93,26 @@ export async function getAccountEntitlements(userId: string) {
       .innerJoin(subscriptionPlans, eq(subscriptionPlans.id, planEntitlements.planId))
       .where(eq(planEntitlements.userId, userId))
       .orderBy(desc(planEntitlements.startsAt)),
+    db.select({
+      id: subscriptionPlans.id,
+      planName: subscriptionPlans.name,
+      description: subscriptionPlans.description,
+      source: sql<string>`'default'`,
+      startsAt: subscriptionPlans.createdAt,
+      expiresAt: sql<Date | null>`null`,
+      rateLimit: subscriptionPlans.rateLimit,
+      dailyLimit: subscriptionPlans.dailyLimit,
+      weeklyLimit: subscriptionPlans.weeklyLimit,
+      monthlyLimit: subscriptionPlans.monthlyLimit,
+    }).from(subscriptionPlans).where(eq(subscriptionPlans.isDefault, true)).limit(1),
     db.select({ id: creditGrants.id, credits: creditGrants.credits, remainingCredits: creditGrants.remainingCredits, expiresAt: creditGrants.expiresAt, source: creditGrants.source, createdAt: creditGrants.createdAt })
       .from(creditGrants).where(eq(creditGrants.userId, userId)).orderBy(desc(creditGrants.createdAt)),
   ])
   return {
-    plans: plans.map((item) => ({ ...item, active: item.startsAt <= now && (!item.expiresAt || item.expiresAt > now) })),
+    plans: [
+      ...(defaultPlan ? [{ ...defaultPlan, id: `default:${defaultPlan.id}`, active: true, included: true }] : []),
+      ...plans.map((item) => ({ ...item, active: item.startsAt <= now && (!item.expiresAt || item.expiresAt > now), included: false })),
+    ],
     credits: credits.map((item) => ({ ...item, active: item.remainingCredits > 0 && (!item.expiresAt || item.expiresAt > now) })),
   }
 }
@@ -106,23 +129,47 @@ export async function getAccountUsage(userId: string, days: 7 | 30 | 90 = 30) {
   const start = new Date()
   start.setUTCDate(start.getUTCDate() - days + 1)
   const startKey = start.toISOString().slice(0, 10)
-  const rows = await db.select({ date: apiUsage.usageDate, count: sql<number>`sum(${apiUsage.requestCount})::int`.mapWith(Number) })
-    .from(apiUsage)
-    .where(and(eq(apiUsage.userId, userId), gte(apiUsage.usageDate, startKey)))
-    .groupBy(apiUsage.usageDate)
-    .orderBy(apiUsage.usageDate)
-  const byDate = new Map(rows.map((row) => [row.date, row.count]))
-  return Array.from({ length: days }, (_, index) => {
+  const [planRows, creditRows] = await Promise.all([
+    db.select({ date: apiUsage.usageDate, planId: apiUsage.planId, planName: subscriptionPlans.name, count: sql<number>`sum(${apiUsage.requestCount})::int`.mapWith(Number) })
+      .from(apiUsage)
+      .innerJoin(subscriptionPlans, eq(subscriptionPlans.id, apiUsage.planId))
+      .where(and(eq(apiUsage.userId, userId), gte(apiUsage.usageDate, startKey)))
+      .groupBy(apiUsage.usageDate, apiUsage.planId, subscriptionPlans.name)
+      .orderBy(apiUsage.usageDate),
+    db.select({ date: sql<string>`to_char(${creditTransactions.createdAt} at time zone 'UTC', 'YYYY-MM-DD')`, count: sql<number>`sum(-${creditTransactions.delta})::int`.mapWith(Number) })
+      .from(creditTransactions)
+      .where(and(eq(creditTransactions.userId, userId), eq(creditTransactions.reason, 'api_usage'), lt(creditTransactions.delta, 0), gte(creditTransactions.createdAt, start)))
+      .groupBy(sql`to_char(${creditTransactions.createdAt} at time zone 'UTC', 'YYYY-MM-DD')`),
+  ])
+  const byDate = new Map<string, number>()
+  const bySource = new Map<string, { id: string; name: string; count: number }>()
+  for (const row of planRows) {
+    byDate.set(row.date, (byDate.get(row.date) ?? 0) + row.count)
+    const source = bySource.get(row.planId) ?? { id: row.planId, name: row.planName, count: 0 }
+    source.count += row.count
+    bySource.set(row.planId, source)
+  }
+  for (const row of creditRows) {
+    byDate.set(row.date, (byDate.get(row.date) ?? 0) + row.count)
+    const source = bySource.get('credits') ?? { id: 'credits', name: 'Credits', count: 0 }
+    source.count += row.count
+    bySource.set('credits', source)
+  }
+  const daily = Array.from({ length: days }, (_, index) => {
     const date = new Date(start)
     date.setUTCDate(start.getUTCDate() + index)
     const key = date.toISOString().slice(0, 10)
     return { date: key, count: byDate.get(key) ?? 0 }
   })
+  return { daily, bySource: [...bySource.values()].sort((a, b) => b.count - a.count) }
 }
 
 export async function getAccountOrders(userId: string) {
+  const [afdianIdentity] = await db.select({ accountId: account.accountId }).from(account).where(and(eq(account.userId, userId), eq(account.providerId, AFDIAN_PROVIDER_ID))).limit(1)
+  const ownership = afdianIdentity ? or(eq(orders.userId, userId), and(eq(orders.providerId, 'psp-afdian'), eq(orders.externalCustomerId, afdianIdentity.accountId))) : eq(orders.userId, userId)
   return db.select({
     id: orders.id,
+    providerId: orders.providerId,
     status: orders.status,
     deliveryStatus: orders.deliveryStatus,
     amount: orders.amount,
@@ -142,6 +189,6 @@ export async function getAccountOrders(userId: string) {
     .leftJoin(payments, eq(payments.orderId, orders.id))
     .leftJoin(redeemCodes, eq(redeemCodes.orderId, orders.id))
     .leftJoin(subscriptions, eq(subscriptions.id, redeemCodes.subscriptionId))
-    .where(eq(orders.userId, userId))
+    .where(ownership)
     .orderBy(desc(orders.createdAt))
 }

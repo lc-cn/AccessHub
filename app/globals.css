@@ -168,6 +168,24 @@
   }
 }
 
+.account-canvas::before {
+  content: '';
+  position: fixed;
+  inset: 0 0 0 16rem;
+  pointer-events: none;
+  background-image: radial-gradient(circle at 78% 2%, rgb(49 87 213 / 0.055), transparent 28rem), radial-gradient(rgb(120 139 178 / 0.13) 0.7px, transparent 0.7px);
+  background-size: auto, 22px 22px;
+  mask-image: linear-gradient(to bottom, black, transparent 72%);
+}
+
+@media (max-width: 63.999rem) {
+  .account-canvas::before { left: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; }
+}
+
 @utility access-input {
   width: 100%;
   border-radius: 0.75rem;
