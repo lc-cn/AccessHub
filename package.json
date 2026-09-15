@@ -7,7 +7,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "test": "node --experimental-strip-types --test lib/*.test.ts"
+    "test": "node --experimental-strip-types --test lib/*.test.ts lib/**/*.test.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.5.0",
@@ -19,6 +19,7 @@
     "drizzle-orm": "^0.45.2",
     "lucide-react": "^1.16.0",
     "next": "16.3.3",
+    "nodemailer": "^10.0.10",
     "pg": "^8.23.0",
     "react": "^19",
     "react-dom": "^19",
@@ -29,6 +30,7 @@
   "devDependencies": {
     "@tailwindcss/postcss": "^4.3.3",
     "@types/node": "^24",
+    "@types/nodemailer": "^8.0.1",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "postcss": "^8.5",
