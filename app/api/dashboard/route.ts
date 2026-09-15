@@ -4,7 +4,7 @@ import { alias } from 'drizzle-orm/pg-core'
 import { headers } from 'next/headers'
 import { auth } from '@/lib/auth'
 import { db } from '@/lib/db'
-import { account, afdianOfferMappings, apiUsage, creditGrants, subscriptions, subscriptionPlans, user } from '@/lib/db/schema'
+import { account, apiUsage, creditGrants, planEntitlements, providerOfferMappings, skus, subscriptionPlans, user } from '@/lib/db/schema'
 import { AFDIAN_PROVIDER_ID, isAfdianOAuthConfigured } from '@/lib/afdian-oauth'
 import { afdianCheckoutUrl } from '@/lib/afdian-commerce'
 import { countEffectivePlanSubscribers } from '@/lib/plan-subscriber-counts'
@@ -16,9 +16,9 @@ export async function GET() {
   const { today, weekStart, monthStart } = usagePeriodKeys()
   const dashboardPlans = alias(subscriptionPlans, 'dashboard_subscription_plans')
   const now = new Date()
-  const activeAnySubscription = and(
-    lte(subscriptions.startsAt, now),
-    or(isNull(subscriptions.expiresAt), gt(subscriptions.expiresAt, now)),
+  const activeAnyEntitlement = and(
+    lte(planEntitlements.startsAt, now),
+    or(isNull(planEntitlements.expiresAt), gt(planEntitlements.expiresAt, now)),
   )
 
   const [rawPlanRows, [userCount], effectiveSubscriptions, purchaseMappings] = await Promise.all([
@@ -35,51 +35,52 @@ export async function GET() {
     .from(dashboardPlans)
     .orderBy(desc(dashboardPlans.isDefault), dashboardPlans.createdAt),
     db.select({ count: count() }).from(user),
-    db.selectDistinctOn([subscriptions.userId], { userId: subscriptions.userId, planId: subscriptions.planId })
-      .from(subscriptions)
-      .where(activeAnySubscription)
-      .orderBy(subscriptions.userId, desc(subscriptions.startsAt), sql`${subscriptions.expiresAt} desc nulls first`),
-    db.select({ offerKey: afdianOfferMappings.offerKey, planId: afdianOfferMappings.planId })
-      .from(afdianOfferMappings)
-      .where(and(eq(afdianOfferMappings.enabled, true), eq(afdianOfferMappings.kind, 'plan')))
-      .orderBy(desc(afdianOfferMappings.updatedAt)),
+    db.selectDistinctOn([planEntitlements.userId], { userId: planEntitlements.userId, planId: planEntitlements.planId })
+      .from(planEntitlements)
+      .where(activeAnyEntitlement)
+      .orderBy(planEntitlements.userId, desc(planEntitlements.startsAt), sql`${planEntitlements.expiresAt} desc nulls first`),
+    db.select({ externalOfferId: providerOfferMappings.externalOfferId, planId: skus.planId })
+      .from(providerOfferMappings)
+      .innerJoin(skus, eq(skus.id, providerOfferMappings.skuId))
+      .where(and(eq(providerOfferMappings.providerId, 'psp-afdian'), eq(providerOfferMappings.externalOfferType, 'plan'), eq(providerOfferMappings.enabled, true), eq(skus.kind, 'plan'), eq(skus.active, true)))
+      .orderBy(desc(providerOfferMappings.updatedAt)),
   ])
-  const subscriberCounts = countEffectivePlanSubscribers({ plans: rawPlanRows, totalUsers: userCount?.count ?? 0, subscriptions: effectiveSubscriptions })
+  const subscriberCounts = countEffectivePlanSubscribers({ plans: rawPlanRows, totalUsers: userCount?.count ?? 0, entitlements: effectiveSubscriptions })
   const checkoutByPlan = new Map<string, string>()
   for (const mapping of purchaseMappings) {
-    if (!mapping.planId || !mapping.offerKey.startsWith('afdian-plan:') || checkoutByPlan.has(mapping.planId)) continue
-    checkoutByPlan.set(mapping.planId, afdianCheckoutUrl(mapping.offerKey.slice('afdian-plan:'.length)))
+    if (!mapping.planId || checkoutByPlan.has(mapping.planId)) continue
+    checkoutByPlan.set(mapping.planId, afdianCheckoutUrl(mapping.externalOfferId))
   }
   const planRows = rawPlanRows.map((plan) => ({ ...plan, subscriberCount: subscriberCounts.get(plan.id) ?? 0, purchaseUrl: checkoutByPlan.get(plan.id) ?? null }))
 
-  const activeSubscription = and(
-    eq(subscriptions.userId, session.user.id),
-    lte(subscriptions.startsAt, now),
-    or(isNull(subscriptions.expiresAt), gt(subscriptions.expiresAt, now)),
+  const activeEntitlement = and(
+    eq(planEntitlements.userId, session.user.id),
+    lte(planEntitlements.startsAt, now),
+    or(isNull(planEntitlements.expiresAt), gt(planEntitlements.expiresAt, now)),
   )
 
-  const [[userRow], [subscription], [usage], [benefits], [creditBalance], [creditBenefits], [afdianAccount]] = await Promise.all([
+  const [[userRow], [entitlement], [usage], [benefits], [creditBalance], [creditBenefits], [afdianAccount]] = await Promise.all([
     db.select({ id: user.id, name: user.name, image: user.image, role: user.role, createdAt: user.createdAt }).from(user).where(eq(user.id, session.user.id)).limit(1),
     db
-      .select({ planId: subscriptionPlans.id, planName: subscriptionPlans.name, rateLimit: subscriptionPlans.rateLimit, dailyLimit: subscriptionPlans.dailyLimit, weeklyLimit: subscriptionPlans.weeklyLimit, monthlyLimit: subscriptionPlans.monthlyLimit, expiresAt: subscriptions.expiresAt })
-      .from(subscriptions)
-      .innerJoin(subscriptionPlans, eq(subscriptionPlans.id, subscriptions.planId))
-      .where(activeSubscription)
-      .orderBy(desc(subscriptions.startsAt), sql`${subscriptions.expiresAt} desc nulls first`)
+      .select({ planId: subscriptionPlans.id, planName: subscriptionPlans.name, rateLimit: subscriptionPlans.rateLimit, dailyLimit: subscriptionPlans.dailyLimit, weeklyLimit: subscriptionPlans.weeklyLimit, monthlyLimit: subscriptionPlans.monthlyLimit, expiresAt: planEntitlements.expiresAt })
+      .from(planEntitlements)
+      .innerJoin(subscriptionPlans, eq(subscriptionPlans.id, planEntitlements.planId))
+      .where(activeEntitlement)
+      .orderBy(desc(planEntitlements.startsAt), sql`${planEntitlements.expiresAt} desc nulls first`)
       .limit(1),
     db.select({
       daily: sql<number>`coalesce(sum(${apiUsage.requestCount}) filter (where ${apiUsage.usageDate} = ${today}), 0)::int`.mapWith(Number),
       weekly: sql<number>`coalesce(sum(${apiUsage.requestCount}) filter (where ${apiUsage.usageDate} >= ${weekStart}), 0)::int`.mapWith(Number),
       monthly: sql<number>`coalesce(sum(${apiUsage.requestCount}) filter (where ${apiUsage.usageDate} >= ${monthStart}), 0)::int`.mapWith(Number),
     }).from(apiUsage).where(and(eq(apiUsage.userId, session.user.id), gte(apiUsage.usageDate, monthStart < weekStart ? monthStart : weekStart))),
-    db.select({ count: count() }).from(subscriptions).where(and(activeSubscription, eq(subscriptions.source, 'redeem'))),
+    db.select({ count: count() }).from(planEntitlements).where(activeEntitlement),
     db.select({ total: sql<number>`coalesce(sum(${creditGrants.remainingCredits}), 0)::int`.mapWith(Number) }).from(creditGrants).where(and(eq(creditGrants.userId, session.user.id), gt(creditGrants.remainingCredits, 0), or(isNull(creditGrants.expiresAt), gt(creditGrants.expiresAt, now)))),
     db.select({ count: count() }).from(creditGrants).where(and(eq(creditGrants.userId, session.user.id), gt(creditGrants.remainingCredits, 0), or(isNull(creditGrants.expiresAt), gt(creditGrants.expiresAt, now)))),
     db.select({ id: account.id }).from(account).where(and(eq(account.userId, session.user.id), eq(account.providerId, AFDIAN_PROVIDER_ID))).limit(1),
   ])
 
   const defaultPlan = planRows.find((plan) => plan.isDefault) ?? null
-  const currentPlan = subscription ?? (defaultPlan ? {
+  const currentPlan = entitlement ?? (defaultPlan ? {
     planId: defaultPlan.id,
     planName: defaultPlan.name,
     rateLimit: defaultPlan.rateLimit,

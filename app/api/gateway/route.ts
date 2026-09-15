@@ -4,7 +4,7 @@ import { headers } from 'next/headers'
 import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { db } from '@/lib/db'
-import { apiUsage, creditGrants, subscriptions, subscriptionPlans } from '@/lib/db/schema'
+import { apiUsage, creditGrants, planEntitlements, subscriptionPlans } from '@/lib/db/schema'
 import { retryAfterSeconds, usagePeriodKeys } from '@/lib/usage-periods'
 import { isUnlimited } from '@/lib/entitlements'
 
@@ -21,7 +21,7 @@ export async function POST() {
 
     await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${session.user.id}))`)
 
-    const [subscription] = await tx
+    const [entitlement] = await tx
       .select({
         planId: subscriptionPlans.id,
         planName: subscriptionPlans.name,
@@ -30,17 +30,17 @@ export async function POST() {
         weeklyLimit: subscriptionPlans.weeklyLimit,
         monthlyLimit: subscriptionPlans.monthlyLimit,
       })
-      .from(subscriptions)
-      .innerJoin(subscriptionPlans, eq(subscriptionPlans.id, subscriptions.planId))
-      .where(and(eq(subscriptions.userId, session.user.id), lte(subscriptions.startsAt, now), or(isNull(subscriptions.expiresAt), gt(subscriptions.expiresAt, now))))
-      .orderBy(desc(subscriptions.startsAt), sql`${subscriptions.expiresAt} desc nulls first`)
+      .from(planEntitlements)
+      .innerJoin(subscriptionPlans, eq(subscriptionPlans.id, planEntitlements.planId))
+      .where(and(eq(planEntitlements.userId, session.user.id), lte(planEntitlements.startsAt, now), or(isNull(planEntitlements.expiresAt), gt(planEntitlements.expiresAt, now))))
+      .orderBy(desc(planEntitlements.startsAt), sql`${planEntitlements.expiresAt} desc nulls first`)
       .limit(1)
-    const [defaultPlan] = subscription ? [] : await tx
+    const [defaultPlan] = entitlement ? [] : await tx
       .select({ planId: subscriptionPlans.id, planName: subscriptionPlans.name, rateLimit: subscriptionPlans.rateLimit, dailyLimit: subscriptionPlans.dailyLimit, weeklyLimit: subscriptionPlans.weeklyLimit, monthlyLimit: subscriptionPlans.monthlyLimit })
       .from(subscriptionPlans)
       .where(eq(subscriptionPlans.isDefault, true))
       .limit(1)
-    const policy = subscription ?? defaultPlan
+    const policy = entitlement ?? defaultPlan
     if (!policy) return NextResponse.json({ error: 'access_policy_missing' }, { status: 403 })
 
     const [totals] = await tx

@@ -1,14 +1,14 @@
 type SubscriptionPlan = { id: string; isDefault: boolean }
-type Subscription = { userId: string; planId: string }
+type PlanEntitlement = { userId: string; planId: string }
 
-export function countEffectivePlanSubscribers({ plans, totalUsers, subscriptions }: { plans: SubscriptionPlan[]; totalUsers: number; subscriptions: Subscription[] }) {
+export function countEffectivePlanSubscribers({ plans, totalUsers, entitlements }: { plans: SubscriptionPlan[]; totalUsers: number; entitlements: PlanEntitlement[] }) {
   const counts = new Map(plans.map((plan) => [plan.id, 0]))
   const assignedUsers = new Set<string>()
 
-  for (const subscription of subscriptions) {
-    if (assignedUsers.has(subscription.userId) || !counts.has(subscription.planId)) continue
-    assignedUsers.add(subscription.userId)
-    counts.set(subscription.planId, (counts.get(subscription.planId) ?? 0) + 1)
+  for (const entitlement of entitlements) {
+    if (assignedUsers.has(entitlement.userId) || !counts.has(entitlement.planId)) continue
+    assignedUsers.add(entitlement.userId)
+    counts.set(entitlement.planId, (counts.get(entitlement.planId) ?? 0) + 1)
   }
 
   const defaultPlan = plans.find((plan) => plan.isDefault)

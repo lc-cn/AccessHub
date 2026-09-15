@@ -44,8 +44,12 @@ export type RedeemCode = {
 
 export type AfdianMapping = {
   id: string
-  offerKey: string
+  externalOfferType: 'plan' | 'sku'
+  externalOfferId: string
   name: string
+  skuId: string
+  skuCode: string
+  skuName: string
   kind: 'plan' | 'credits'
   planId: string | null
   planName: string | null
@@ -57,7 +61,14 @@ export type AfdianMapping = {
   updatedAt: string
 }
 
-export type AfdianOrderCode = { id: string; code: string; kind: 'plan' | 'credits'; planId: string | null; planName: string | null; credits: number | null; durationValue: number; durationUnit: 'day' | 'month' | 'quarter' | 'year'; redeemedAt: string | null; redeemedBy: string | null }
-export type AfdianOrder = { id: string; outTradeNo: string; userId: string | null; afdianPlanId: string | null; afdianPlanTitle: string; orderMonths: number; amount: string; offerKey: string | null; messageStatus: 'pending' | 'sending' | 'sent' | 'failed' | 'unknown' | 'not_requested'; messageAttempts: number; messageAttemptedAt: string | null; messageSentAt: string | null; messageLastError: string | null; createdAt: string; codes: AfdianOrderCode[] }
+export type OrderCode = { id: string; code: string; kind: 'plan' | 'credits'; planId: string | null; planName: string | null; credits: number | null; durationValue: number; durationUnit: 'day' | 'month' | 'quarter' | 'year'; redeemedAt: string | null; redeemedBy: string | null }
+export type Order = { id: string; providerId: string | null; externalOrderId: string | null; externalCustomerId: string | null; externalOfferId: string | null; externalOfferTitle: string; userId: string | null; skuId: string | null; skuCode: string | null; skuName: string | null; status: string; termMonths: number; amount: string; currency: string; deliveryStatus: 'pending' | 'sending' | 'sent' | 'failed' | 'unknown' | 'not_requested'; deliveryAttempts: number; deliveryAttemptedAt: string | null; deliveredAt: string | null; deliveryLastError: string | null; createdAt: string; codes: OrderCode[] }
 
-export type AdminData = { plans: AdminPlan[]; codes: RedeemCode[]; afdianMappings: AfdianMapping[]; afdianOrders?: AfdianOrder[]; afadianWebhookConfigured: boolean; afadianMessengerConfigured?: boolean }
+export type Sku = { id: string; code: string; name: string; description: string; kind: 'plan' | 'credits'; planId: string | null; planName: string | null; credits: number | null; durationValue: number; durationUnit: 'day' | 'month' | 'quarter' | 'year'; active: boolean; createdAt: string; updatedAt: string }
+export type AdminUser = { id: string; name: string; email: string; image: string | null; role: string; createdAt: string }
+export type ActivityLog = { id: string; actorId: string | null; action: string; resourceType: string; resourceId: string | null; detail: string; createdAt: string }
+export type Subscription = { id: string; userId: string | null; userName: string | null; planId: string; planName: string; skuId: string | null; skuCode: string | null; providerId: string | null; status: 'pending_activation' | 'trialing' | 'active' | 'past_due' | 'paused' | 'canceled' | 'expired'; currentPeriodStart: string | null; currentPeriodEnd: string | null; cancelAtPeriodEnd: boolean; createdAt: string; updatedAt: string }
+export type Payment = { id: string; orderId: string; providerId: string | null; externalPaymentId: string | null; status: string; amount: string; currency: string; paidAt: string | null; createdAt: string }
+export type ProviderEvent = { id: string; providerId: string; externalEventId: string; type: string; status: string; error: string | null; processedAt: string | null; createdAt: string }
+
+export type AdminData = { plans: AdminPlan[]; codes: RedeemCode[]; afdianMappings: AfdianMapping[]; orders: Order[]; skus: Sku[]; users: AdminUser[]; logs: ActivityLog[]; subscriptions: Subscription[]; payments: Payment[]; providerEvents: ProviderEvent[]; afadianWebhookConfigured: boolean; afadianMessengerConfigured?: boolean }
