@@ -48,7 +48,15 @@ The webhook accepts paid orders only and uses `out_trade_no` as its idempotency 
 
 Apply SQL files in `drizzle/` to the PostgreSQL database before deploying schema-dependent changes.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Console routes
+
+The console uses path-based routes rather than query-string views:
+
+- `/dashboard`, `/redeem-codes`, and `/api-docs` are regular user pages.
+- `/admin/groups`, `/admin/redeem-codes`, and `/admin/afdian-mappings` are administrator list pages.
+- New resources use `/new`; editable resources use `/{id}`.
+
+`/` redirects to `/dashboard`. The old `?view=` navigation is intentionally unsupported.
 
 ## Learn More
 

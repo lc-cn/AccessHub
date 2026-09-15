@@ -1,13 +1,15 @@
 'use client'
 
+import Link from 'next/link'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Check, Copy, Download, KeyRound, Search, Sparkles, TicketCheck } from 'lucide-react'
+import { ArrowLeft, Check, Copy, Download, KeyRound, Plus, Search, Sparkles, TicketCheck } from 'lucide-react'
 import type { AdminData, DashboardGroup, RedeemCode } from './types'
 import { requestJson } from '@/lib/http-client'
 
 type StatusFilter = '全部' | '可使用' | '已核销' | '已过期'
+type Props = { authenticated: boolean; isAdmin: boolean; groups: DashboardGroup[]; onChanged: () => Promise<void>; onSignIn: () => Promise<void>; mode: 'redeem' | 'list' | 'new' }
 
-export function RedeemCodes({ authenticated, isAdmin, groups, onChanged, onSignIn }: { authenticated: boolean; isAdmin: boolean; groups: DashboardGroup[]; onChanged: () => Promise<void>; onSignIn: () => Promise<void> }) {
+export function RedeemCodes({ authenticated, isAdmin, groups, onChanged, onSignIn, mode }: Props) {
   const [code, setCode] = useState('')
   const [redeeming, setRedeeming] = useState(false)
   const [redeemNotice, setRedeemNotice] = useState<{ tone: 'error' | 'success'; text: string } | null>(null)
@@ -22,7 +24,7 @@ export function RedeemCodes({ authenticated, isAdmin, groups, onChanged, onSignI
   const [copied, setCopied] = useState('')
 
   const loadAdmin = useCallback(async () => {
-    if (!isAdmin) return
+    if (!isAdmin || mode === 'redeem') return
     setAdminLoading(true)
     try {
       const data = await requestJson<AdminData>('/api/admin?section=codes', { cache: 'no-store' })
@@ -31,33 +33,28 @@ export function RedeemCodes({ authenticated, isAdmin, groups, onChanged, onSignI
       setAdminError('')
     } catch (error) { setAdminError(error instanceof Error ? error.message : '兑换码台账读取失败，请稍后重试') }
     finally { setAdminLoading(false) }
-  }, [isAdmin])
+  }, [isAdmin, mode])
 
   useEffect(() => { void loadAdmin() }, [loadAdmin])
 
   const redeem = async () => {
     if (!authenticated) return onSignIn()
     if (!code.trim()) return setRedeemNotice({ tone: 'error', text: '请输入兑换码' })
-    setRedeeming(true)
-    setRedeemNotice(null)
+    setRedeeming(true); setRedeemNotice(null)
     try {
       const result = await requestJson<{ kind: 'credits' | 'group'; credits?: number; group?: string }>('/api/redeem', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code }) })
       setRedeemNotice({ tone: 'success', text: result.kind === 'credits' ? `已增加 ${Number(result.credits).toLocaleString()} credits` : `已加入「${result.group}」，权益立即生效` })
-      setCode('')
-      await Promise.all([onChanged(), loadAdmin()])
+      setCode(''); await onChanged()
     } catch (error) { setRedeemNotice({ tone: 'error', text: error instanceof Error ? error.message : '核销失败，请检查兑换码' }) }
     finally { setRedeeming(false) }
   }
 
   const generate = async () => {
     if (generator.kind === 'group' && !generator.groupId) return setAdminError('请先选择用户组')
-    setGenerating(true)
-    setGenerated([])
+    setGenerating(true); setGenerated([])
     try {
       const result = await requestJson<{ codes: string[] }>('/api/admin', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ type: 'codes', ...generator }) })
-      setGenerated(result.codes)
-      setAdminError('')
-      await loadAdmin()
+      setGenerated(result.codes); setAdminError(''); await Promise.all([loadAdmin(), onChanged()])
     } catch (error) { setAdminError(error instanceof Error ? error.message : '生成失败，请检查配置') }
     finally { setGenerating(false) }
   }
@@ -68,57 +65,16 @@ export function RedeemCodes({ authenticated, isAdmin, groups, onChanged, onSignI
     return matchesText && (filter === '全部' || statusOf(item) === filter)
   }), [adminData, filter, query])
   const counts = useMemo(() => ({ total: adminData?.codes.length ?? 0, available: adminData?.codes.filter((item) => statusOf(item) === '可使用').length ?? 0, redeemed: adminData?.codes.filter((item) => statusOf(item) === '已核销').length ?? 0 }), [adminData])
+  const copy = async (value: string, key = value) => { await navigator.clipboard?.writeText(value); setCopied(key); setTimeout(() => setCopied(''), 1500) }
+  const downloadGenerated = () => { const blob = new Blob([`${generated.join('\n')}\n`], { type: 'text/plain;charset=utf-8' }); const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = `accesshub-codes-${new Date().toISOString().slice(0, 10)}.txt`; document.body.appendChild(link); link.click(); link.remove(); URL.revokeObjectURL(url) }
 
-  const copy = async (value: string, key = value) => {
-    await navigator.clipboard?.writeText(value)
-    setCopied(key)
-    setTimeout(() => setCopied(''), 1500)
-  }
+  if (mode === 'redeem') return <RedeemPanel authenticated={authenticated} code={code} setCode={setCode} redeeming={redeeming} notice={redeemNotice} redeem={redeem}/>
+  if (mode === 'new') return <div className="mx-auto max-w-2xl"><Link href="/admin/redeem-codes" className="mb-5 inline-flex items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-[#3157d5]"><ArrowLeft size={14}/>返回兑换码列表</Link><section className="rounded-[24px] bg-white p-6 shadow-[0_18px_55px_rgba(39,55,92,.06)] sm:p-8"><div className="flex items-center gap-3"><span className="grid size-10 place-items-center rounded-xl bg-[#edf2ff] text-[#3157d5]"><Sparkles size={18}/></span><div><h2 className="text-lg font-semibold">配置兑换码批次</h2><p className="mt-1 text-xs text-slate-400">生成后可复制或下载，已签发的兑换码不可修改。</p></div></div><div className="mt-8 grid gap-5 sm:grid-cols-2"><Field label="权益类型"><select value={generator.kind} onChange={(event) => setGenerator({ ...generator, kind: event.target.value as 'group' | 'credits' })} className="access-input"><option value="group">用户组权益</option><option value="credits">credits 增量包</option></select></Field>{generator.kind === 'group' ? <Field label="权益用户组"><select value={generator.groupId} onChange={(event) => setGenerator({ ...generator, groupId: event.target.value })} className="access-input">{groups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}</select></Field> : <Field label="每码 credits"><input type="number" min="1" value={generator.credits} onChange={(event) => setGenerator({ ...generator, credits: event.target.value })} className="access-input tabular-nums"/></Field>}<Field label="生成数量"><input type="number" min="1" max="1000" value={generator.count} onChange={(event) => setGenerator({ ...generator, count: event.target.value })} className="access-input tabular-nums"/></Field><Field label="权益时长"><input type="number" min="-1" value={generator.durationValue} onChange={(event) => setGenerator({ ...generator, durationValue: event.target.value })} className="access-input tabular-nums" placeholder="-1 为永久"/></Field><Field label="权益周期"><select value={generator.durationUnit} disabled={generator.durationValue === '-1'} onChange={(event) => setGenerator({ ...generator, durationUnit: event.target.value as typeof generator.durationUnit })} className="access-input"><option value="day">天</option><option value="month">月</option><option value="quarter">季</option><option value="year">年</option></select></Field></div><p className="mt-4 text-[11px] leading-5 text-slate-400">权益时长填 -1 表示永久；credits 会在基础用量达到限制后自动抵扣。</p>{adminError && <p className="mt-4 rounded-xl bg-rose-50 px-3 py-2.5 text-xs text-rose-600">{adminError}</p>}<div className="mt-6 flex justify-end"><button onClick={() => void generate()} disabled={generating || (generator.kind === 'group' && groups.length === 0)} className="h-11 rounded-xl bg-[#3157d5] px-6 text-sm font-medium text-white transition hover:bg-[#284bc2] disabled:opacity-50">{generating ? '生成中…' : '生成兑换码'}</button></div>{generated.length > 0 && <div className="mt-6 rounded-2xl bg-[#f5f7fb] p-5"><div className="flex items-center justify-between gap-3"><p className="text-sm font-medium text-slate-700">本次生成 {generated.length} 个</p><div className="flex items-center gap-3"><button onClick={downloadGenerated} className="flex items-center gap-1 text-xs text-slate-500"><Download size={13}/>下载</button><button onClick={() => void copy(generated.join('\n'), 'batch')} className="flex items-center gap-1 text-xs text-[#3157d5]">{copied === 'batch' ? <Check size={13}/> : <Copy size={13}/>}复制全部</button></div></div><div className="mt-4 max-h-48 space-y-2 overflow-y-auto">{generated.map((item) => <code key={item} className="block rounded-lg bg-white px-3 py-2 text-xs text-slate-600">{item}</code>)}</div></div>}</section></div>
 
-  const downloadGenerated = () => {
-    const blob = new Blob([`${generated.join('\n')}\n`], { type: 'text/plain;charset=utf-8' })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = `accesshub-codes-${new Date().toISOString().slice(0, 10)}.txt`
-    document.body.appendChild(link)
-    link.click()
-    link.remove()
-    URL.revokeObjectURL(url)
-  }
-
-  return <div className="space-y-7">
-    <section className="grid gap-6 xl:grid-cols-[minmax(0,1.1fr)_minmax(340px,.9fr)]">
-      <article className="relative overflow-hidden rounded-[24px] bg-[#182238] p-7 text-white shadow-[0_22px_55px_rgba(24,34,56,.18)]">
-        <div className="absolute -right-12 -top-16 size-52 rounded-full bg-[#3157d5]/30 blur-3xl"/>
-        <div className="relative"><span className="grid size-10 place-items-center rounded-xl bg-white/10"><TicketCheck size={19}/></span><p className="mt-8 text-xs font-medium text-slate-400">核销兑换码</p><h2 className="mt-2 max-w-lg text-2xl font-semibold tracking-tight">为当前账户添加访问权益</h2><p className="mt-2 text-sm leading-6 text-slate-300">每个兑换码只能核销一次。成功后，工作台配额与有效期会立即更新。</p>
-          <div className="mt-7 flex flex-col gap-2 sm:flex-row"><input value={code} onChange={(event) => setCode(event.target.value.toUpperCase())} onKeyDown={(event) => { if (event.key === 'Enter') void redeem() }} disabled={!authenticated || redeeming} className="h-12 min-w-0 flex-1 rounded-xl border border-white/10 bg-white/[0.08] px-4 font-mono text-sm tracking-wide text-white outline-none transition placeholder:text-slate-500 focus:border-[#7893ee] focus:ring-4 focus:ring-blue-500/10 disabled:opacity-60" placeholder={authenticated ? 'ACCS-XXXXXX-XXXXXX' : '登录后输入兑换码'}/><button onClick={() => void redeem()} disabled={redeeming} className="h-12 rounded-xl bg-white px-5 text-sm font-semibold text-[#182238] transition hover:bg-slate-100 active:translate-y-px disabled:opacity-60">{!authenticated ? '使用 GitHub 登录' : redeeming ? '核销中…' : '立即核销'}</button></div>
-          {redeemNotice && <p className={`mt-3 text-xs ${redeemNotice.tone === 'success' ? 'text-emerald-300' : 'text-rose-300'}`}>{redeemNotice.text}</p>}
-        </div>
-      </article>
-
-      <article className="rounded-[24px] bg-white p-6 shadow-[0_18px_55px_rgba(39,55,92,.06)]">
-        <div className="flex items-start justify-between"><div><p className="text-xs font-medium text-[#3157d5]">使用说明</p><h3 className="mt-1 text-lg font-semibold">核销前请确认</h3></div><KeyRound size={19} className="text-slate-300"/></div>
-        <ol className="mt-6 space-y-5">{[['01', '确认当前登录账户', '权益会绑定到当前 UID，核销后无法转移。'], ['02', '检查权益用户组', '不同兑换码对应不同配额和有效期。'], ['03', '核销后刷新凭据', '新的访问策略会在下一次 API 调用时生效。']].map(([index, title, detail]) => <li key={index} className="grid grid-cols-[32px_1fr] gap-3"><span className="font-mono text-xs text-slate-300">{index}</span><span><strong className="block text-sm font-medium">{title}</strong><span className="mt-1 block text-xs leading-5 text-slate-400">{detail}</span></span></li>)}</ol>
-      </article>
-    </section>
-
-    {isAdmin && <section className="space-y-6 border-t border-slate-200 pt-8">
-      <div><p className="text-xs font-medium tracking-wide text-[#3157d5]">管理员工具</p><h2 className="mt-1 text-2xl font-semibold tracking-tight">兑换码管理</h2><p className="mt-2 text-sm text-slate-500">批量生成、复制和追踪最近 200 个兑换码。</p></div>
-      <div className="grid gap-6 xl:grid-cols-[360px_1fr]">
-        <aside className="h-fit rounded-[22px] bg-white p-6 shadow-[0_18px_55px_rgba(39,55,92,.06)]"><div className="flex items-center gap-3"><span className="grid size-9 place-items-center rounded-xl bg-[#edf2ff] text-[#3157d5]"><Sparkles size={17}/></span><div><h3 className="font-semibold">批量生成</h3><p className="text-xs text-slate-400">用户组权益或 credits 增量包</p></div></div><div className="mt-6 space-y-4"><Field label="权益类型"><select value={generator.kind} onChange={(event) => setGenerator({ ...generator, kind: event.target.value as 'group' | 'credits' })} className="access-input"><option value="group">用户组权益</option><option value="credits">credits 增量包</option></select></Field>{generator.kind === 'group' ? <Field label="权益用户组"><select value={generator.groupId} onChange={(event) => setGenerator({ ...generator, groupId: event.target.value })} className="access-input">{groups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}</select></Field> : <Field label="每码 credits"><input type="number" min="1" value={generator.credits} onChange={(event) => setGenerator({ ...generator, credits: event.target.value })} className="access-input tabular-nums"/></Field>}<div className="grid grid-cols-2 gap-3"><Field label="生成数量"><input type="number" min="1" max="1000" value={generator.count} onChange={(event) => setGenerator({ ...generator, count: event.target.value })} className="access-input tabular-nums"/></Field><Field label="权益时长"><input type="number" min="-1" value={generator.durationValue} onChange={(event) => setGenerator({ ...generator, durationValue: event.target.value })} className="access-input tabular-nums" placeholder="-1 为永久"/></Field></div><Field label="权益周期"><select value={generator.durationUnit} disabled={generator.durationValue === '-1'} onChange={(event) => setGenerator({ ...generator, durationUnit: event.target.value as typeof generator.durationUnit })} className="access-input"><option value="day">天</option><option value="month">月</option><option value="quarter">季</option><option value="year">年</option></select></Field><p className="text-[11px] leading-5 text-slate-400">权益时长填 -1 表示永久；credits 会在基础用量达到限制后自动抵扣。</p><button onClick={() => void generate()} disabled={generating || (generator.kind === 'group' && groups.length === 0)} className="h-11 w-full rounded-xl bg-[#3157d5] text-sm font-medium text-white transition hover:bg-[#284bc2] active:translate-y-px disabled:opacity-50">{generating ? '生成中…' : '生成兑换码'}</button>{adminError && <p className="text-xs text-rose-600">{adminError}</p>}</div>
-          {generated.length > 0 && <div className="mt-5 rounded-xl bg-[#f5f7fb] p-4"><div className="flex items-center justify-between gap-3"><p className="text-xs font-medium text-slate-600">本次生成 {generated.length} 个</p><div className="flex items-center gap-2"><button onClick={downloadGenerated} className="flex items-center gap-1 text-xs text-slate-500"><Download size={13}/>下载</button><button onClick={() => void copy(generated.join('\n'), 'batch')} className="flex items-center gap-1 text-xs text-[#3157d5]">{copied === 'batch' ? <Check size={13}/> : <Copy size={13}/>}复制全部</button></div></div><p className="mt-3 truncate font-mono text-xs text-slate-400">{generated[0]}</p></div>}
-        </aside>
-
-        <div className="min-w-0 rounded-[22px] bg-white shadow-[0_18px_55px_rgba(39,55,92,.06)]"><div className="flex flex-col gap-4 border-b border-slate-100 p-5 sm:flex-row sm:items-center sm:justify-between"><div className="flex gap-5"><MiniMetric value={counts.total} label="总计"/><MiniMetric value={counts.available} label="可使用"/><MiniMetric value={counts.redeemed} label="已核销"/></div><label className="flex h-10 items-center gap-2 rounded-xl bg-[#f5f7fb] px-3 text-slate-400 focus-within:ring-2 focus-within:ring-blue-100"><Search size={15}/><input value={query} onChange={(event) => setQuery(event.target.value)} className="w-full bg-transparent text-xs text-slate-700 outline-none" placeholder="搜索兑换码或用户组"/></label></div>
-          <div className="flex gap-1 overflow-x-auto px-5 py-3">{(['全部', '可使用', '已核销', '已过期'] as StatusFilter[]).map((item) => <button key={item} onClick={() => setFilter(item)} className={`rounded-lg px-3 py-1.5 text-xs transition ${filter === item ? 'bg-[#182238] text-white' : 'text-slate-500 hover:bg-slate-50'}`}>{item}</button>)}</div>
-          <div className="overflow-x-auto">{adminLoading && !adminData ? <div className="space-y-2 p-5">{[1, 2, 3, 4].map((item) => <div key={item} className="h-11 animate-pulse rounded-lg bg-slate-50"/>)}</div> : <><table className="w-full min-w-[680px] text-left"><thead><tr className="border-y border-slate-100 text-[11px] font-medium text-slate-400"><th className="px-5 py-3">兑换码</th><th className="px-4 py-3">权益类型</th><th className="px-4 py-3">周期</th><th className="px-4 py-3">状态</th><th className="px-5 py-3 text-right">创建时间</th></tr></thead><tbody>{visibleCodes.map((item) => { const status = statusOf(item); return <tr key={item.id} className="border-b border-slate-50 text-xs last:border-0 hover:bg-slate-50/70"><td className="px-5 py-3.5"><button onClick={() => void copy(item.code)} className="flex items-center gap-2 font-mono text-slate-700 hover:text-[#3157d5]">{item.code}{copied === item.code ? <Check size={12}/> : <Copy size={12} className="text-slate-300"/>}</button></td><td className="px-4 py-3.5 text-slate-600">{item.kind === 'credits' ? `${item.credits?.toLocaleString()} credits` : item.groupName}</td><td className="px-4 py-3.5 text-slate-500">{durationText(item.durationValue, item.durationUnit)}</td><td className="px-4 py-3.5"><StatusBadge status={status}/></td><td className="px-5 py-3.5 text-right text-slate-400">{new Intl.DateTimeFormat('zh-CN').format(new Date(item.createdAt))}</td></tr>})}</tbody></table>{visibleCodes.length === 0 && <div className="px-5 py-12 text-center text-sm text-slate-400">没有符合条件的兑换码</div>}</>}</div>
-        </div>
-      </div>
-    </section>}
-  </div>
+  return <section className="rounded-[22px] bg-white shadow-[0_18px_55px_rgba(39,55,92,.06)]"><div className="flex flex-col gap-4 border-b border-slate-100 p-5 sm:flex-row sm:items-center sm:justify-between"><div className="flex gap-6"><MiniMetric value={counts.total} label="总计"/><MiniMetric value={counts.available} label="可使用"/><MiniMetric value={counts.redeemed} label="已核销"/></div><Link href="/admin/redeem-codes/new" className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-[#3157d5] px-4 text-sm font-medium text-white"><Plus size={15}/>生成兑换码</Link></div><div className="flex flex-col gap-3 border-b border-slate-100 p-5 sm:flex-row sm:items-center sm:justify-between"><div className="flex gap-1 overflow-x-auto">{(['全部', '可使用', '已核销', '已过期'] as StatusFilter[]).map((item) => <button key={item} onClick={() => setFilter(item)} className={`rounded-lg px-3 py-1.5 text-xs transition ${filter === item ? 'bg-[#182238] text-white' : 'text-slate-500 hover:bg-slate-50'}`}>{item}</button>)}</div><label className="flex h-10 items-center gap-2 rounded-xl bg-[#f5f7fb] px-3 text-slate-400 focus-within:ring-2 focus-within:ring-blue-100"><Search size={15}/><input value={query} onChange={(event) => setQuery(event.target.value)} className="w-full bg-transparent text-xs text-slate-700 outline-none" placeholder="搜索兑换码或用户组"/></label></div>{adminError && <p className="m-5 rounded-xl bg-rose-50 px-3 py-2 text-xs text-rose-600">{adminError}</p>}<div className="overflow-x-auto">{adminLoading && !adminData ? <div className="space-y-2 p-5">{[1, 2, 3, 4].map((item) => <div key={item} className="h-11 animate-pulse rounded-lg bg-slate-50"/>)}</div> : <><table className="w-full min-w-[680px] text-left"><thead><tr className="border-b border-slate-100 text-[11px] font-medium text-slate-400"><th className="px-5 py-3">兑换码</th><th className="px-4 py-3">权益类型</th><th className="px-4 py-3">周期</th><th className="px-4 py-3">状态</th><th className="px-5 py-3 text-right">创建时间</th></tr></thead><tbody>{visibleCodes.map((item) => { const status = statusOf(item); return <tr key={item.id} className="border-b border-slate-50 text-xs last:border-0 hover:bg-slate-50/70"><td className="px-5 py-3.5"><button onClick={() => void copy(item.code)} className="flex items-center gap-2 font-mono text-slate-700 hover:text-[#3157d5]">{item.code}{copied === item.code ? <Check size={12}/> : <Copy size={12} className="text-slate-300"/>}</button></td><td className="px-4 py-3.5 text-slate-600">{item.kind === 'credits' ? `${item.credits?.toLocaleString()} credits` : item.groupName}</td><td className="px-4 py-3.5 text-slate-500">{durationText(item.durationValue, item.durationUnit)}</td><td className="px-4 py-3.5"><StatusBadge status={status}/></td><td className="px-5 py-3.5 text-right text-slate-400">{new Intl.DateTimeFormat('zh-CN').format(new Date(item.createdAt))}</td></tr>})}</tbody></table>{visibleCodes.length === 0 && <div className="px-5 py-12 text-center text-sm text-slate-400">没有符合条件的兑换码</div>}</>}</div></section>
 }
 
+function RedeemPanel({ authenticated, code, setCode, redeeming, notice, redeem }: { authenticated: boolean; code: string; setCode: (code: string) => void; redeeming: boolean; notice: { tone: 'error' | 'success'; text: string } | null; redeem: () => Promise<void> }) { return <section className="grid gap-6 xl:grid-cols-[minmax(0,1.1fr)_minmax(340px,.9fr)]"><article className="relative overflow-hidden rounded-[24px] bg-[#182238] p-7 text-white shadow-[0_22px_55px_rgba(24,34,56,.18)]"><div className="absolute -right-12 -top-16 size-52 rounded-full bg-[#3157d5]/30 blur-3xl"/><div className="relative"><span className="grid size-10 place-items-center rounded-xl bg-white/10"><TicketCheck size={19}/></span><p className="mt-8 text-xs font-medium text-slate-400">核销兑换码</p><h2 className="mt-2 max-w-lg text-2xl font-semibold tracking-tight">为当前账户添加访问权益</h2><p className="mt-2 text-sm leading-6 text-slate-300">每个兑换码只能核销一次。成功后，工作台配额与有效期会立即更新。</p><div className="mt-7 flex flex-col gap-2 sm:flex-row"><input value={code} onChange={(event) => setCode(event.target.value.toUpperCase())} onKeyDown={(event) => { if (event.key === 'Enter') void redeem() }} disabled={!authenticated || redeeming} className="h-12 min-w-0 flex-1 rounded-xl border border-white/10 bg-white/[0.08] px-4 font-mono text-sm tracking-wide text-white outline-none transition placeholder:text-slate-500 focus:border-[#7893ee] focus:ring-4 focus:ring-blue-500/10 disabled:opacity-60" placeholder={authenticated ? 'ACCS-XXXXXX-XXXXXX' : '登录后输入兑换码'}/><button onClick={() => void redeem()} disabled={redeeming} className="h-12 rounded-xl bg-white px-5 text-sm font-semibold text-[#182238] transition hover:bg-slate-100 disabled:opacity-60">{!authenticated ? '使用 GitHub 登录' : redeeming ? '核销中…' : '立即核销'}</button></div>{notice && <p className={`mt-3 text-xs ${notice.tone === 'success' ? 'text-emerald-300' : 'text-rose-300'}`}>{notice.text}</p>}</div></article><article className="rounded-[24px] bg-white p-6 shadow-[0_18px_55px_rgba(39,55,92,.06)]"><div className="flex items-start justify-between"><div><p className="text-xs font-medium text-[#3157d5]">使用说明</p><h3 className="mt-1 text-lg font-semibold">核销前请确认</h3></div><KeyRound size={19} className="text-slate-300"/></div><ol className="mt-6 space-y-5">{[['01', '确认当前登录账户', '权益会绑定到当前 UID，核销后无法转移。'], ['02', '检查权益用户组', '不同兑换码对应不同配额和有效期。'], ['03', '核销后刷新凭据', '新的访问策略会在下一次 API 调用时生效。']].map(([index, title, detail]) => <li key={index} className="grid grid-cols-[32px_1fr] gap-3"><span className="font-mono text-xs text-slate-300">{index}</span><span><strong className="block text-sm font-medium">{title}</strong><span className="mt-1 block text-xs leading-5 text-slate-400">{detail}</span></span></li>)}</ol></article></section> }
 function Field({ label, children }: { label: string; children: React.ReactNode }) { return <label className="block"><span className="mb-2 block text-xs font-medium text-slate-500">{label}</span>{children}</label> }
 function MiniMetric({ value, label }: { value: number; label: string }) { return <div><p className="font-mono text-lg font-semibold tabular-nums">{value}</p><p className="text-[10px] text-slate-400">{label}</p></div> }
 function StatusBadge({ status }: { status: Exclude<StatusFilter, '全部'> }) { return <span className={`inline-flex rounded-md px-2 py-1 text-[10px] font-medium ${status === '可使用' ? 'bg-emerald-50 text-emerald-700' : status === '已核销' ? 'bg-slate-100 text-slate-500' : 'bg-amber-50 text-amber-700'}`}>{status}</span> }
