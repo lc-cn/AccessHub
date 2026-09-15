@@ -56,5 +56,21 @@ _Avoid_: 活动日志
 系统中由用户或管理员操作产生的可追溯记录。
 _Avoid_: 订单、访问用量
 
+**个人中心（Account Center）**：
+已登录用户维护自身资料、安全设置、登录身份，并查看个人权益、用量和订单的自助区域。
+_Avoid_: 管理后台、Dashboard
+
+**主邮箱（Primary Email）**：
+用户已验证或等待验证的主要联系地址，也是邮箱密码登录身份使用的地址。
+_Avoid_: OAuth Provider、登录账号
+
+**登录身份（Login Identity）**：
+附着于同一用户、可用于证明其身份的登录方式，例如 GitHub、爱发电或邮箱密码。
+_Avoid_: 用户、主邮箱
+
+**Credits 流水（Credit Transaction）**：
+一次不可变的 Credits 余额变化记录，用于解释授予、消费、调整和期初余额。
+_Avoid_: Credits 余额、API 用量
+
 **Credits 增量包（Credits Pack）**：
 一种提供补充调用额度的 SKU，在订阅计划周期配额耗尽后逐次抵扣。
