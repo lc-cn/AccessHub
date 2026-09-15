@@ -8,6 +8,7 @@ export type DashboardGroup = {
   monthlyLimit: number | null
   isDefault: boolean
   memberCount: number
+  purchaseUrl: string | null
 }
 
 export type DashboardData = {
@@ -21,7 +22,7 @@ export type DashboardData = {
   groups: DashboardGroup[]
 }
 
-export type AdminGroup = Omit<DashboardGroup, 'memberCount'> & {
+export type AdminGroup = Omit<DashboardGroup, 'memberCount' | 'purchaseUrl'> & {
   createdAt: string
   updatedAt: string
 }
@@ -56,4 +57,7 @@ export type AfdianRule = {
   updatedAt: string
 }
 
-export type AdminData = { groups: AdminGroup[]; codes: RedeemCode[]; afdianRules: AfdianRule[]; afadianWebhookConfigured: boolean }
+export type AfdianOrderCode = { id: string; code: string; kind: 'group' | 'credits'; groupId: string | null; groupName: string | null; credits: number | null; durationValue: number; durationUnit: 'day' | 'month' | 'quarter' | 'year'; redeemedAt: string | null; redeemedBy: string | null }
+export type AfdianOrder = { id: string; outTradeNo: string; userId: string | null; planId: string | null; planTitle: string; orderMonths: number; amount: string; benefitKey: string | null; messageStatus: 'pending' | 'sending' | 'sent' | 'failed' | 'unknown' | 'not_requested'; messageAttempts: number; messageAttemptedAt: string | null; messageSentAt: string | null; messageLastError: string | null; createdAt: string; codes: AfdianOrderCode[] }
+
+export type AdminData = { groups: AdminGroup[]; codes: RedeemCode[]; afdianRules: AfdianRule[]; afdianOrders?: AfdianOrder[]; afadianWebhookConfigured: boolean; afadianMessengerConfigured?: boolean }

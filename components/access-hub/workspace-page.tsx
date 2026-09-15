@@ -3,8 +3,9 @@
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useState } from 'react'
-import { BookOpen, HeartHandshake, LayoutDashboard, LogOut, RefreshCw, Ticket, Users, Zap } from 'lucide-react'
+import { BookOpen, HeartHandshake, LayoutDashboard, LogOut, ReceiptText, RefreshCw, Ticket, Users, Zap } from 'lucide-react'
 import { AfdianMappings } from './afadian-mappings'
+import { AfdianOrders } from './afadian-orders'
 import { ApiDocs } from './api-docs'
 import { GroupManagement } from './group-management'
 import { Overview } from './overview'
@@ -14,7 +15,7 @@ import { useWorkspaceData } from './workspace-data'
 import { authClient } from '@/lib/auth-client'
 import { requestJson } from '@/lib/http-client'
 
-export type WorkspaceRoute = 'dashboard' | 'redeem' | 'codes' | 'codes-new' | 'groups' | 'groups-new' | 'groups-edit' | 'afdian' | 'afdian-new' | 'afdian-edit' | 'docs'
+export type WorkspaceRoute = 'dashboard' | 'redeem' | 'codes' | 'codes-new' | 'groups' | 'groups-new' | 'groups-edit' | 'afdian' | 'afdian-new' | 'afdian-edit' | 'afdian-orders' | 'afdian-order-detail' | 'docs'
 type Props = { route: WorkspaceRoute; resourceId?: string }
 type NavItem = { label: string; href: string; active: WorkspaceRoute[]; icon: typeof LayoutDashboard; admin?: boolean }
 const navItems: NavItem[] = [
@@ -23,6 +24,7 @@ const navItems: NavItem[] = [
   { label: '兑换码', href: '/admin/redeem-codes', active: ['codes', 'codes-new'], icon: Ticket, admin: true },
   { label: '用户组', href: '/admin/groups', active: ['groups', 'groups-new', 'groups-edit'], icon: Users, admin: true },
   { label: '爱发电映射', href: '/admin/afdian-mappings', active: ['afdian', 'afdian-new', 'afdian-edit'], icon: HeartHandshake, admin: true },
+  { label: '爱发电订单', href: '/admin/afdian-orders', active: ['afdian-orders', 'afdian-order-detail'], icon: ReceiptText, admin: true },
   { label: 'API 文档', href: '/api-docs', active: ['docs'], icon: BookOpen },
 ]
 const routeMeta: Record<WorkspaceRoute, { eyebrow: string; title: string; description: string; admin?: boolean }> = {
@@ -36,6 +38,8 @@ const routeMeta: Record<WorkspaceRoute, { eyebrow: string; title: string; descri
   afdian: { eyebrow: '管理员', title: '爱发电映射', description: '维护爱发电方案与本地权益之间的自动到账规则。', admin: true },
   'afdian-new': { eyebrow: '管理员 / 爱发电映射', title: '新增映射', description: '关联爱发电方案或 SKU 与本地权益。', admin: true },
   'afdian-edit': { eyebrow: '管理员 / 爱发电映射', title: '编辑映射', description: '修改现有爱发电权益映射。', admin: true },
+  'afdian-orders': { eyebrow: '管理员', title: '爱发电订单', description: '追踪订单、兑换码、私信送达和核销状态。', admin: true },
+  'afdian-order-detail': { eyebrow: '管理员 / 爱发电订单', title: '订单详情', description: '查看订单对应的权益与兑换码履约闭环。', admin: true },
   docs: { eyebrow: '开发者', title: 'API 文档', description: '查看当前可用接口及接入方式。' },
 }
 
@@ -77,6 +81,7 @@ function RouteContent({ route, resourceId, dashboard, loading, copied, refresh, 
   if (route === 'codes' || route === 'codes-new') return <RedeemCodes authenticated isAdmin groups={groups} onChanged={refresh} onSignIn={signIn} mode={route === 'codes' ? 'list' : 'new'}/>
   if (route === 'groups' || route === 'groups-new' || route === 'groups-edit') return <GroupManagement groups={groups} onChanged={refresh} mode={route === 'groups' ? 'list' : route === 'groups-new' ? 'new' : 'edit'} groupId={resourceId}/>
   if (route === 'afdian' || route === 'afdian-new' || route === 'afdian-edit') return <AfdianMappings groups={groups} mode={route === 'afdian' ? 'list' : route === 'afdian-new' ? 'new' : 'edit'} ruleId={resourceId}/>
+  if (route === 'afdian-orders' || route === 'afdian-order-detail') return <AfdianOrders mode={route === 'afdian-orders' ? 'list' : 'detail'} orderId={resourceId}/>
   return <ApiDocs/>
 }
 

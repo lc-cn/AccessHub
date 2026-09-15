@@ -4,8 +4,9 @@ import { alias } from 'drizzle-orm/pg-core'
 import { headers } from 'next/headers'
 import { auth } from '@/lib/auth'
 import { db } from '@/lib/db'
-import { account, apiUsage, creditGrants, groupMemberships, groups, user } from '@/lib/db/schema'
+import { account, afadianBenefitRules, apiUsage, creditGrants, groupMemberships, groups, user } from '@/lib/db/schema'
 import { AFDIAN_PROVIDER_ID, isAfdianOAuthConfigured } from '@/lib/afdian-oauth'
+import { afdianCheckoutUrl } from '@/lib/afdian-commerce'
 import { countEffectiveGroupMembers } from '@/lib/group-member-counts'
 import { usagePeriodKeys } from '@/lib/usage-periods'
 
@@ -20,7 +21,7 @@ export async function GET() {
     or(isNull(groupMemberships.expiresAt), gt(groupMemberships.expiresAt, now)),
   )
 
-  const [rawGroupRows, [userCount], effectiveMemberships] = await Promise.all([
+  const [rawGroupRows, [userCount], effectiveMemberships, purchaseRules] = await Promise.all([
     db.select({
       id: dashboardGroups.id,
       name: dashboardGroups.name,
@@ -38,9 +39,18 @@ export async function GET() {
       .from(groupMemberships)
       .where(activeAnyMembership)
       .orderBy(groupMemberships.userId, desc(groupMemberships.startsAt), sql`${groupMemberships.expiresAt} desc nulls first`),
+    db.select({ benefitKey: afadianBenefitRules.benefitKey, groupId: afadianBenefitRules.groupId })
+      .from(afadianBenefitRules)
+      .where(and(eq(afadianBenefitRules.enabled, true), eq(afadianBenefitRules.kind, 'group')))
+      .orderBy(desc(afadianBenefitRules.updatedAt)),
   ])
   const memberCounts = countEffectiveGroupMembers({ groups: rawGroupRows, totalUsers: userCount?.count ?? 0, memberships: effectiveMemberships })
-  const groupRows = rawGroupRows.map((group) => ({ ...group, memberCount: memberCounts.get(group.id) ?? 0 }))
+  const checkoutByGroup = new Map<string, string>()
+  for (const rule of purchaseRules) {
+    if (!rule.groupId || !rule.benefitKey.startsWith('plan:') || checkoutByGroup.has(rule.groupId)) continue
+    checkoutByGroup.set(rule.groupId, afdianCheckoutUrl(rule.benefitKey.slice(5)))
+  }
+  const groupRows = rawGroupRows.map((group) => ({ ...group, memberCount: memberCounts.get(group.id) ?? 0, purchaseUrl: checkoutByGroup.get(group.id) ?? null }))
 
   const activeMembership = and(
     eq(groupMemberships.userId, session.user.id),

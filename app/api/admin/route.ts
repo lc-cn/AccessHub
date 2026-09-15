@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server'
-import { and, asc, desc, eq, not } from 'drizzle-orm'
+import { and, asc, desc, eq, inArray, not } from 'drizzle-orm'
 import { randomBytes, randomUUID } from 'crypto'
 import { headers } from 'next/headers'
 import { auth } from '@/lib/auth'
 import { db } from '@/lib/db'
-import { afadianBenefitRules, groups, redeemCodes, user } from '@/lib/db/schema'
+import { afadianBenefitRules, afadianOrders, groups, redeemCodes, user } from '@/lib/db/schema'
 import { legacyDurationDays, parsePositiveInteger } from '@/lib/entitlements'
 import { parseBenefitInput, parseGroupPolicyInput } from '@/lib/admin-entitlements'
 
@@ -24,7 +24,7 @@ async function requireAdmin() {
 export async function GET(request: Request) {
   if (!(await requireAdmin())) return NextResponse.json({ error: '无权访问' }, { status: 403 })
   const section = new URL(request.url).searchParams.get('section') || 'all'
-  const [rows, codes, afdianRules] = await Promise.all([
+  const [rows, codes, afdianRules, orderRows] = await Promise.all([
     db.select().from(groups).orderBy(asc(groups.createdAt)),
     section === 'all' || section === 'codes' ? db
     .select({
@@ -63,8 +63,38 @@ export async function GET(request: Request) {
     .from(afadianBenefitRules)
     .leftJoin(groups, eq(groups.id, afadianBenefitRules.groupId))
     .orderBy(desc(afadianBenefitRules.updatedAt)) : Promise.resolve([]),
+    section === 'all' || section === 'afdian-orders' ? db.select({
+      id: afadianOrders.id,
+      outTradeNo: afadianOrders.outTradeNo,
+      userId: afadianOrders.userId,
+      planId: afadianOrders.planId,
+      planTitle: afadianOrders.planTitle,
+      orderMonths: afadianOrders.orderMonths,
+      amount: afadianOrders.amount,
+      benefitKey: afadianOrders.benefitKey,
+      messageStatus: afadianOrders.messageStatus,
+      messageAttempts: afadianOrders.messageAttempts,
+      messageAttemptedAt: afadianOrders.messageAttemptedAt,
+      messageSentAt: afadianOrders.messageSentAt,
+      messageLastError: afadianOrders.messageLastError,
+      createdAt: afadianOrders.createdAt,
+    }).from(afadianOrders).orderBy(desc(afadianOrders.createdAt)).limit(100) : Promise.resolve([]),
   ])
-  return NextResponse.json({ groups: rows, codes, afdianRules, afadianWebhookConfigured: Boolean(process.env.AFDIAN_WEBHOOK_SECRET) })
+  const orderCodes = orderRows.length ? await db.select({
+    id: redeemCodes.id,
+    code: redeemCodes.code,
+    afadianOrderId: redeemCodes.afadianOrderId,
+    kind: redeemCodes.kind,
+    groupId: redeemCodes.groupId,
+    groupName: groups.name,
+    credits: redeemCodes.credits,
+    durationValue: redeemCodes.durationValue,
+    durationUnit: redeemCodes.durationUnit,
+    redeemedAt: redeemCodes.redeemedAt,
+    redeemedBy: redeemCodes.redeemedBy,
+  }).from(redeemCodes).leftJoin(groups, eq(groups.id, redeemCodes.groupId)).where(inArray(redeemCodes.afadianOrderId, orderRows.map((order) => order.id))) : []
+  const orders = orderRows.map((order) => ({ ...order, codes: orderCodes.filter((code) => code.afadianOrderId === order.id) }))
+  return NextResponse.json({ groups: rows, codes, afdianRules, afdianOrders: orders, afadianWebhookConfigured: Boolean(process.env.AFDIAN_WEBHOOK_SECRET), afadianMessengerConfigured: Boolean(process.env.AFDIAN_USER_ID && process.env.AFDIAN_ADMIN_TOKEN) })
 }
 
 export async function POST(request: Request) {

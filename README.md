@@ -22,7 +22,7 @@ pnpm dev
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
-The application expects `DATABASE_URL`, `BETTER_AUTH_SECRET`, `GITHUB_CLIENT_ID`, and `GITHUB_CLIENT_SECRET`. Set `NEXT_PUBLIC_AFDIAN_URL` to the creator page used by the upgrade call to action.
+The application expects `DATABASE_URL`, `BETTER_AUTH_SECRET`, `GITHUB_CLIENT_ID`, and `GITHUB_CLIENT_SECRET`. Set `NEXT_PUBLIC_AFDIAN_URL` to the creator page used by the generic upgrade call to action.
 
 To enable Afdian account linking, also configure `AFDIAN_OAUTH_CLIENT_ID`, `AFDIAN_OAUTH_CLIENT_SECRET`, and the canonical `BETTER_AUTH_URL` (for production, `https://www.l2cl.link`). Register this OAuth callback URL with Afdian:
 
@@ -42,9 +42,11 @@ Configure Afdian's order webhook to call:
 https://your-domain.example/api/afadian/order?token=<AFDIAN_WEBHOOK_SECRET>
 ```
 
-Set `AFDIAN_WEBHOOK_SECRET` to a long random value and redact the webhook query string from access logs. Configure plan and SKU mappings in the administrator-only **Afdian** page. Each mapping can grant a user group or credits pack, select its term, set the number of codes per purchased item, and be disabled without deletion. SKU mappings take precedence over plan mappings.
+Set `AFDIAN_WEBHOOK_SECRET` to a long random value and redact the webhook query string from access logs. To send generated codes through Afdian private messages, also configure the creator account's `AFDIAN_USER_ID` and OpenAPI token as `AFDIAN_ADMIN_TOKEN`.
 
-The webhook accepts paid orders only and uses `out_trade_no` as its idempotency key. A GitHub-authenticated user who starts purchasing through `/api/afadian/purchase` is asked to link Afdian first. The OAuth identity is stored as a Better Auth `afdian` account provider, so webhook orders with the same Afdian `user_id` can grant the mapped group or credits directly. Orders from an unlinked Afdian account keep the original behavior and generate `AFD-...` codes as a fallback. Set `NEXT_PUBLIC_AFDIAN_URL` to the public creator page shown in the upgrade action.
+Configure plan and SKU mappings in the administrator-only **Afdian mappings** page. Each mapping grants a user group or credits pack and sets the number of codes per purchased item. SKU mappings take precedence over plan mappings. An enabled `plan:<plan_id>` mapping also turns the corresponding dashboard plan card into a direct Afdian checkout link.
+
+The webhook accepts paid orders only and uses `out_trade_no` as its idempotency key. Every valid mapped order generates `AFD-...` codes. The code term is taken from `data.order.month`, expressed in months, and its effective period starts only when the user redeems the code. The buyer is notified through `/api/open/send-msg`, using `data.order.user_id` as `recipient`. The administrator-only `/admin/afdian-orders` area shows each order, generated code, message delivery state, and redemption state. Definite message failures may retry on a repeated webhook; unknown delivery outcomes are held for manual reconciliation to avoid duplicate messages.
 
 Apply SQL files in `drizzle/` to the PostgreSQL database before deploying schema-dependent changes.
 
@@ -53,7 +55,7 @@ Apply SQL files in `drizzle/` to the PostgreSQL database before deploying schema
 The console uses path-based routes rather than query-string views:
 
 - `/dashboard`, `/redeem-codes`, and `/api-docs` are regular user pages.
-- `/admin/groups`, `/admin/redeem-codes`, and `/admin/afdian-mappings` are administrator list pages.
+- `/admin/groups`, `/admin/redeem-codes`, `/admin/afdian-mappings`, and `/admin/afdian-orders` are administrator list pages.
 - New resources use `/new`; editable resources use `/{id}`.
 
 `/` redirects to `/dashboard`. The old `?view=` navigation is intentionally unsupported.
