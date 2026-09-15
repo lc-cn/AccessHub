@@ -1,7 +1,7 @@
 import { ArrowUpRight, Braces, KeyRound, ShieldCheck } from 'lucide-react'
 
 const endpoints = [
-  { method: 'POST', path: '/api/gateway', title: '验证访问权限', description: '原子校验分钟、每日、每周与每月配额；超额时自动抵扣 credits。' },
+  { method: 'POST', path: '/api/gateway', title: '验证访问权限', description: '依次校验当前计划、默认计划的独立周期配额；均耗尽后自动抵扣 credits。' },
   { method: 'POST', path: '/api/redeem', title: '核销兑换码', description: '为当前账户添加订阅计划权益或 credits 增量包。' },
   { method: 'GET', path: '/api/dashboard', title: '读取工作台', description: '返回当前账户、用量、权益和订阅计划摘要。' },
 ]
@@ -17,12 +17,15 @@ export function ApiDocs() {
 )
 
 if (response.status === 429) {
-  // 当前配额和 credits 均已用尽
+  // 当前计划、默认计划和 credits 均已用尽
 }
 
 const result = await response.json()
 if (result.creditUsed) {
   // 本次调用消耗了 1 credit
-}`}</code></pre></article><article className="rounded-[20px] bg-white p-5"><div className="flex items-center gap-3"><span className="grid size-9 place-items-center rounded-xl bg-emerald-50 text-emerald-600"><ShieldCheck size={17}/></span><div><h3 className="text-sm font-medium">会话安全</h3><p className="mt-0.5 text-xs text-slate-400">Cookie 由 Better Auth 管理</p></div></div></article><article className="rounded-[20px] bg-white p-5"><div className="flex items-center gap-3"><span className="grid size-9 place-items-center rounded-xl bg-[#edf2ff] text-[#3157d5]"><KeyRound size={17}/></span><div><h3 className="text-sm font-medium">身份标识</h3><p className="mt-0.5 text-xs text-slate-400">UID 可在概览页复制</p></div></div></article></aside>
+}
+
+// current_plan | default_plan | default_fallback | credits
+console.log(result.allowanceSource)`}</code></pre></article><article className="rounded-[20px] bg-white p-5"><div className="flex items-center gap-3"><span className="grid size-9 place-items-center rounded-xl bg-emerald-50 text-emerald-600"><ShieldCheck size={17}/></span><div><h3 className="text-sm font-medium">会话安全</h3><p className="mt-0.5 text-xs text-slate-400">Cookie 由 Better Auth 管理</p></div></div></article><article className="rounded-[20px] bg-white p-5"><div className="flex items-center gap-3"><span className="grid size-9 place-items-center rounded-xl bg-[#edf2ff] text-[#3157d5]"><KeyRound size={17}/></span><div><h3 className="text-sm font-medium">身份标识</h3><p className="mt-0.5 text-xs text-slate-400">UID 可在概览页复制</p></div></div></article></aside>
   </div>
 }

@@ -28,6 +28,7 @@ export async function GET() {
       id: dashboardPlans.id,
       name: dashboardPlans.name,
       description: dashboardPlans.description,
+      rank: dashboardPlans.rank,
       rateLimit: dashboardPlans.rateLimit,
       dailyLimit: dashboardPlans.dailyLimit,
       weeklyLimit: dashboardPlans.weeklyLimit,
@@ -35,12 +36,13 @@ export async function GET() {
       isDefault: dashboardPlans.isDefault,
     })
     .from(dashboardPlans)
-    .orderBy(desc(dashboardPlans.isDefault), dashboardPlans.createdAt),
+    .orderBy(dashboardPlans.rank, dashboardPlans.createdAt),
     db.select({ count: count() }).from(user),
     db.selectDistinctOn([planEntitlements.userId], { userId: planEntitlements.userId, planId: planEntitlements.planId })
       .from(planEntitlements)
+      .innerJoin(subscriptionPlans, eq(subscriptionPlans.id, planEntitlements.planId))
       .where(activeAnyEntitlement)
-      .orderBy(planEntitlements.userId, desc(planEntitlements.startsAt), sql`${planEntitlements.expiresAt} desc nulls first`),
+      .orderBy(planEntitlements.userId, desc(subscriptionPlans.rank), desc(planEntitlements.startsAt), sql`${planEntitlements.expiresAt} desc nulls first`),
     db.select({ externalOfferId: providerOfferMappings.externalOfferId, planId: skus.planId })
       .from(providerOfferMappings)
       .innerJoin(skus, eq(skus.id, providerOfferMappings.skuId))
@@ -61,20 +63,15 @@ export async function GET() {
     or(isNull(planEntitlements.expiresAt), gt(planEntitlements.expiresAt, now)),
   )
 
-  const [[userRow], [entitlement], [usage], [benefits], [creditBalance], [creditBenefits], [afdianAccount]] = await Promise.all([
+  const [[userRow], [entitlement], [benefits], [creditBalance], [creditBenefits], [afdianAccount]] = await Promise.all([
     db.select({ id: user.id, name: user.name, image: user.image, role: user.role, createdAt: user.createdAt }).from(user).where(eq(user.id, session.user.id)).limit(1),
     db
-      .select({ planId: subscriptionPlans.id, planName: subscriptionPlans.name, rateLimit: subscriptionPlans.rateLimit, dailyLimit: subscriptionPlans.dailyLimit, weeklyLimit: subscriptionPlans.weeklyLimit, monthlyLimit: subscriptionPlans.monthlyLimit, expiresAt: planEntitlements.expiresAt })
+      .select({ planId: subscriptionPlans.id, planName: subscriptionPlans.name, rank: subscriptionPlans.rank, rateLimit: subscriptionPlans.rateLimit, dailyLimit: subscriptionPlans.dailyLimit, weeklyLimit: subscriptionPlans.weeklyLimit, monthlyLimit: subscriptionPlans.monthlyLimit, expiresAt: planEntitlements.expiresAt })
       .from(planEntitlements)
       .innerJoin(subscriptionPlans, eq(subscriptionPlans.id, planEntitlements.planId))
       .where(activeEntitlement)
-      .orderBy(desc(planEntitlements.startsAt), sql`${planEntitlements.expiresAt} desc nulls first`)
+      .orderBy(desc(subscriptionPlans.rank), desc(planEntitlements.startsAt), sql`${planEntitlements.expiresAt} desc nulls first`)
       .limit(1),
-    db.select({
-      daily: sql<number>`coalesce(sum(${apiUsage.requestCount}) filter (where ${apiUsage.usageDate} = ${today}), 0)::int`.mapWith(Number),
-      weekly: sql<number>`coalesce(sum(${apiUsage.requestCount}) filter (where ${apiUsage.usageDate} >= ${weekStart}), 0)::int`.mapWith(Number),
-      monthly: sql<number>`coalesce(sum(${apiUsage.requestCount}) filter (where ${apiUsage.usageDate} >= ${monthStart}), 0)::int`.mapWith(Number),
-    }).from(apiUsage).where(and(eq(apiUsage.userId, session.user.id), gte(apiUsage.usageDate, monthStart < weekStart ? monthStart : weekStart))),
     db.select({ count: count() }).from(planEntitlements).where(activeEntitlement),
     db.select({ total: sql<number>`coalesce(sum(${creditGrants.remainingCredits}), 0)::int`.mapWith(Number) }).from(creditGrants).where(and(eq(creditGrants.userId, session.user.id), gt(creditGrants.remainingCredits, 0), or(isNull(creditGrants.expiresAt), gt(creditGrants.expiresAt, now)))),
     db.select({ count: count() }).from(creditGrants).where(and(eq(creditGrants.userId, session.user.id), gt(creditGrants.remainingCredits, 0), or(isNull(creditGrants.expiresAt), gt(creditGrants.expiresAt, now)))),
@@ -85,12 +82,24 @@ export async function GET() {
   const currentPlan = entitlement ?? (defaultPlan ? {
     planId: defaultPlan.id,
     planName: defaultPlan.name,
+    rank: defaultPlan.rank,
     rateLimit: defaultPlan.rateLimit,
     dailyLimit: defaultPlan.dailyLimit,
     weeklyLimit: defaultPlan.weeklyLimit,
     monthlyLimit: defaultPlan.monthlyLimit,
     expiresAt: null,
   } : null)
+
+  const usageFor = async (planId: string | undefined) => {
+    if (!planId) return { daily: 0, weekly: 0, monthly: 0 }
+    const [usage] = await db.select({
+      daily: sql<number>`coalesce(sum(${apiUsage.requestCount}) filter (where ${apiUsage.usageDate} = ${today}), 0)::int`.mapWith(Number),
+      weekly: sql<number>`coalesce(sum(${apiUsage.requestCount}) filter (where ${apiUsage.usageDate} >= ${weekStart}), 0)::int`.mapWith(Number),
+      monthly: sql<number>`coalesce(sum(${apiUsage.requestCount}) filter (where ${apiUsage.usageDate} >= ${monthStart}), 0)::int`.mapWith(Number),
+    }).from(apiUsage).where(and(eq(apiUsage.userId, session.user.id), eq(apiUsage.planId, planId), gte(apiUsage.usageDate, monthStart < weekStart ? monthStart : weekStart)))
+    return { daily: usage?.daily ?? 0, weekly: usage?.weekly ?? 0, monthly: usage?.monthly ?? 0 }
+  }
+  const [usage, defaultUsage] = await Promise.all([usageFor(currentPlan?.planId), usageFor(defaultPlan?.id)])
 
   return NextResponse.json({
     authenticated: true,
@@ -102,7 +111,9 @@ export async function GET() {
       createdAt: session.user.createdAt,
     },
     currentPlan,
-    usage: { daily: usage?.daily ?? 0, weekly: usage?.weekly ?? 0, monthly: usage?.monthly ?? 0 },
+    usage,
+    defaultPlan: defaultPlan ? { planId: defaultPlan.id, planName: defaultPlan.name, rateLimit: defaultPlan.rateLimit, dailyLimit: defaultPlan.dailyLimit, weeklyLimit: defaultPlan.weeklyLimit, monthlyLimit: defaultPlan.monthlyLimit } : null,
+    defaultUsage,
     activeBenefits: (benefits?.count ?? 0) + (creditBenefits?.count ?? 0),
     creditsRemaining: creditBalance?.total ?? 0,
     afdian: { linked: Boolean(afdianAccount), oauthConfigured: isAfdianOAuthConfigured() },

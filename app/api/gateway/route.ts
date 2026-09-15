@@ -6,9 +6,7 @@ import { auth } from '@/lib/auth'
 import { db } from '@/lib/db'
 import { apiUsage, creditGrants, planEntitlements, subscriptionPlans } from '@/lib/db/schema'
 import { retryAfterSeconds, usagePeriodKeys } from '@/lib/usage-periods'
-import { isUnlimited } from '@/lib/entitlements'
-
-type Period = 'minute' | 'day' | 'week' | 'month'
+import { selectAllowance, type UsageSnapshot } from '@/lib/usage-allowance'
 
 export async function POST() {
   const session = await auth.api.getSession({ headers: await headers() })
@@ -18,83 +16,70 @@ export async function POST() {
     const now = new Date()
     const minuteStart = new Date(now.getTime() - 60_000)
     const { today, weekStart, monthStart } = usagePeriodKeys(now)
-
     await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${session.user.id}))`)
 
-    const [entitlement] = await tx
-      .select({
-        planId: subscriptionPlans.id,
-        planName: subscriptionPlans.name,
-        rateLimit: subscriptionPlans.rateLimit,
-        dailyLimit: subscriptionPlans.dailyLimit,
-        weeklyLimit: subscriptionPlans.weeklyLimit,
-        monthlyLimit: subscriptionPlans.monthlyLimit,
-      })
-      .from(planEntitlements)
-      .innerJoin(subscriptionPlans, eq(subscriptionPlans.id, planEntitlements.planId))
-      .where(and(eq(planEntitlements.userId, session.user.id), lte(planEntitlements.startsAt, now), or(isNull(planEntitlements.expiresAt), gt(planEntitlements.expiresAt, now))))
-      .orderBy(desc(planEntitlements.startsAt), sql`${planEntitlements.expiresAt} desc nulls first`)
-      .limit(1)
-    const [defaultPlan] = entitlement ? [] : await tx
-      .select({ planId: subscriptionPlans.id, planName: subscriptionPlans.name, rateLimit: subscriptionPlans.rateLimit, dailyLimit: subscriptionPlans.dailyLimit, weeklyLimit: subscriptionPlans.weeklyLimit, monthlyLimit: subscriptionPlans.monthlyLimit })
-      .from(subscriptionPlans)
-      .where(eq(subscriptionPlans.isDefault, true))
-      .limit(1)
-    const policy = entitlement ?? defaultPlan
-    if (!policy) return NextResponse.json({ error: 'access_policy_missing' }, { status: 403 })
+    const planSelection = {
+      planId: subscriptionPlans.id, planName: subscriptionPlans.name, rank: subscriptionPlans.rank,
+      rateLimit: subscriptionPlans.rateLimit, dailyLimit: subscriptionPlans.dailyLimit,
+      weeklyLimit: subscriptionPlans.weeklyLimit, monthlyLimit: subscriptionPlans.monthlyLimit,
+    }
+    const [[entitlement], [defaultPlan]] = await Promise.all([
+      tx.select(planSelection).from(planEntitlements).innerJoin(subscriptionPlans, eq(subscriptionPlans.id, planEntitlements.planId))
+        .where(and(eq(planEntitlements.userId, session.user.id), lte(planEntitlements.startsAt, now), or(isNull(planEntitlements.expiresAt), gt(planEntitlements.expiresAt, now))))
+        .orderBy(desc(subscriptionPlans.rank), desc(planEntitlements.startsAt), sql`${planEntitlements.expiresAt} desc nulls first`).limit(1),
+      tx.select(planSelection).from(subscriptionPlans).where(eq(subscriptionPlans.isDefault, true)).limit(1),
+    ])
+    const currentPlan = entitlement ?? defaultPlan
+    if (!currentPlan || !defaultPlan) return NextResponse.json({ error: 'access_policy_missing' }, { status: 403 })
 
-    const [totals] = await tx
-      .select({
-        daily: sql<number>`coalesce(sum(${apiUsage.requestCount}) filter (where ${apiUsage.usageDate} = ${today}), 0)::int`.mapWith(Number),
-        weekly: sql<number>`coalesce(sum(${apiUsage.requestCount}) filter (where ${apiUsage.usageDate} >= ${weekStart}), 0)::int`.mapWith(Number),
-        monthly: sql<number>`coalesce(sum(${apiUsage.requestCount}) filter (where ${apiUsage.usageDate} >= ${monthStart}), 0)::int`.mapWith(Number),
-      })
-      .from(apiUsage)
-      .where(and(eq(apiUsage.userId, session.user.id), gte(apiUsage.usageDate, monthStart < weekStart ? monthStart : weekStart)))
-
-    const [todayUsage] = await tx.select().from(apiUsage).where(and(eq(apiUsage.userId, session.user.id), eq(apiUsage.usageDate, today))).orderBy(desc(apiUsage.windowStartedAt)).limit(1)
-    const minuteCount = todayUsage?.windowStartedAt && todayUsage.windowStartedAt > minuteStart ? todayUsage.windowCount : 0
-    const checks: { period: Period; used: number; limit: number | null }[] = [
-      { period: 'minute', used: minuteCount, limit: policy.rateLimit },
-      { period: 'day', used: totals?.daily ?? 0, limit: policy.dailyLimit },
-      { period: 'week', used: totals?.weekly ?? 0, limit: policy.weeklyLimit },
-      { period: 'month', used: totals?.monthly ?? 0, limit: policy.monthlyLimit },
-    ]
-    const exceeded = checks.find((item) => !isUnlimited(item.limit) && item.used >= item.limit!)
-    let creditUsed = false
-    let creditsRemaining = 0
-    if (exceeded) {
-      const [grant] = await tx
-        .select({ id: creditGrants.id, remainingCredits: creditGrants.remainingCredits })
-        .from(creditGrants)
-        .where(and(eq(creditGrants.userId, session.user.id), gt(creditGrants.remainingCredits, 0), or(isNull(creditGrants.expiresAt), gt(creditGrants.expiresAt, now))))
-        .orderBy(sql`${creditGrants.expiresAt} asc nulls last`, creditGrants.createdAt)
-        .limit(1)
-      if (!grant) return NextResponse.json({
-        error: 'usage_limit_exceeded',
-        period: exceeded.period,
-        limit: exceeded.limit,
-        used: exceeded.used,
-        creditsRemaining: 0,
-        retryAfterSeconds: retryAfterSeconds(exceeded.period, now, todayUsage?.windowStartedAt),
-      }, { status: 429 })
-      await tx.update(creditGrants).set({ remainingCredits: grant.remainingCredits - 1 }).where(eq(creditGrants.id, grant.id))
-      creditUsed = true
+    const loadUsage = async (planId: string) => {
+      const [[totals], [todayUsage]] = await Promise.all([
+        tx.select({
+          daily: sql<number>`coalesce(sum(${apiUsage.requestCount}) filter (where ${apiUsage.usageDate} = ${today}), 0)::int`.mapWith(Number),
+          weekly: sql<number>`coalesce(sum(${apiUsage.requestCount}) filter (where ${apiUsage.usageDate} >= ${weekStart}), 0)::int`.mapWith(Number),
+          monthly: sql<number>`coalesce(sum(${apiUsage.requestCount}) filter (where ${apiUsage.usageDate} >= ${monthStart}), 0)::int`.mapWith(Number),
+        }).from(apiUsage).where(and(eq(apiUsage.userId, session.user.id), eq(apiUsage.planId, planId), gte(apiUsage.usageDate, monthStart < weekStart ? monthStart : weekStart))),
+        tx.select().from(apiUsage).where(and(eq(apiUsage.userId, session.user.id), eq(apiUsage.planId, planId), eq(apiUsage.usageDate, today))).orderBy(desc(apiUsage.windowStartedAt)).limit(1),
+      ])
+      const usage: UsageSnapshot = {
+        minute: todayUsage?.windowStartedAt && todayUsage.windowStartedAt > minuteStart ? todayUsage.windowCount : 0,
+        daily: totals?.daily ?? 0, weekly: totals?.weekly ?? 0, monthly: totals?.monthly ?? 0,
+      }
+      return { usage, todayUsage }
     }
 
-    if (todayUsage) {
-      const inCurrentWindow = todayUsage.windowStartedAt > minuteStart
-      await tx.update(apiUsage).set({
-        requestCount: todayUsage.requestCount + 1,
-        windowCount: inCurrentWindow ? todayUsage.windowCount + 1 : 1,
-        windowStartedAt: inCurrentWindow ? todayUsage.windowStartedAt : now,
-      }).where(eq(apiUsage.id, todayUsage.id))
+    const candidates = entitlement && entitlement.planId !== defaultPlan.planId
+      ? [{ plan: entitlement, source: 'current_plan' as const }, { plan: defaultPlan, source: 'default_fallback' as const }]
+      : [{ plan: defaultPlan, source: 'default_plan' as const }]
+    const evaluated = await Promise.all(candidates.map(async (candidate) => {
+      const snapshot = await loadUsage(candidate.plan.planId)
+      return { ...candidate, snapshot, policy: candidate.plan, usage: snapshot.usage }
+    }))
+    const allowance = selectAllowance(evaluated)
+    const selected = allowance.selected
+    const lastExceeded = allowance.exceeded
+    const lastWindowStartedAt = evaluated.at(-1)?.snapshot.todayUsage?.windowStartedAt
+
+    let creditUsed = false
+    if (!selected) {
+      const [grant] = await tx.select({ id: creditGrants.id, remainingCredits: creditGrants.remainingCredits }).from(creditGrants)
+        .where(and(eq(creditGrants.userId, session.user.id), gt(creditGrants.remainingCredits, 0), or(isNull(creditGrants.expiresAt), gt(creditGrants.expiresAt, now))))
+        .orderBy(sql`${creditGrants.expiresAt} asc nulls last`, creditGrants.createdAt).limit(1)
+      if (!grant) return NextResponse.json({ error: 'usage_limit_exceeded', period: lastExceeded?.period, limit: lastExceeded?.limit, used: lastExceeded?.used, creditsRemaining: 0, retryAfterSeconds: lastExceeded ? retryAfterSeconds(lastExceeded.period, now, lastWindowStartedAt) : undefined }, { status: 429 })
+      await tx.update(creditGrants).set({ remainingCredits: grant.remainingCredits - 1 }).where(eq(creditGrants.id, grant.id))
+      creditUsed = true
     } else {
-      await tx.insert(apiUsage).values({ id: randomUUID(), userId: session.user.id, usageDate: today, requestCount: 1, windowCount: 1, windowStartedAt: now })
+      const { todayUsage } = selected.snapshot
+      if (todayUsage) {
+        const inCurrentWindow = todayUsage.windowStartedAt > minuteStart
+        await tx.update(apiUsage).set({ requestCount: todayUsage.requestCount + 1, windowCount: inCurrentWindow ? todayUsage.windowCount + 1 : 1, windowStartedAt: inCurrentWindow ? todayUsage.windowStartedAt : now }).where(eq(apiUsage.id, todayUsage.id))
+      } else {
+        await tx.insert(apiUsage).values({ id: randomUUID(), userId: session.user.id, planId: selected.plan.planId, usageDate: today, requestCount: 1, windowCount: 1, windowStartedAt: now })
+      }
     }
 
     const [creditTotal] = await tx.select({ total: sql<number>`coalesce(sum(${creditGrants.remainingCredits}), 0)::int`.mapWith(Number) }).from(creditGrants).where(and(eq(creditGrants.userId, session.user.id), gt(creditGrants.remainingCredits, 0), or(isNull(creditGrants.expiresAt), gt(creditGrants.expiresAt, now))))
-    creditsRemaining = creditTotal?.total ?? 0
-    return NextResponse.json({ ok: true, plan: policy.planName, creditUsed, creditsRemaining, usage: { minute: minuteCount + 1, daily: (totals?.daily ?? 0) + 1, weekly: (totals?.weekly ?? 0) + 1, monthly: (totals?.monthly ?? 0) + 1 } })
+    const usage = selected ? { minute: selected.snapshot.usage.minute + 1, daily: selected.snapshot.usage.daily + 1, weekly: selected.snapshot.usage.weekly + 1, monthly: selected.snapshot.usage.monthly + 1 } : null
+    return NextResponse.json({ ok: true, plan: currentPlan.planName, allowancePlan: selected?.plan.planName ?? null, allowanceSource: selected?.source ?? 'credits', creditUsed, creditsRemaining: creditTotal?.total ?? 0, usage })
   })
 }

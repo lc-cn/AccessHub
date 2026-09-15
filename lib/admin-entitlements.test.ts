@@ -3,8 +3,8 @@ import test from 'node:test'
 import { parseBenefitInput, parseSubscriptionPlanPolicyInput } from './admin-entitlements.ts'
 
 test('normalizes a valid subscription plan and preserves unlimited quotas', () => {
-  const result = parseSubscriptionPlanPolicyInput({ name: ' pro ', description: ' paid ', rateLimit: '120', dailyLimit: '5000', weeklyLimit: '-1', monthlyLimit: '-1' })
-  assert.deepEqual(result, { ok: true, value: { name: 'pro', description: 'paid', rateLimit: 120, dailyLimit: 5000, weeklyLimit: -1, monthlyLimit: -1, isDefault: false } })
+  const result = parseSubscriptionPlanPolicyInput({ name: ' pro ', description: ' paid ', rank: '200', rateLimit: '120', dailyLimit: '5000', weeklyLimit: '-1', monthlyLimit: '-1' })
+  assert.deepEqual(result, { ok: true, value: { name: 'pro', description: 'paid', rank: 200, rateLimit: 120, dailyLimit: 5000, weeklyLimit: -1, monthlyLimit: -1, isDefault: false } })
 })
 
 test('rejects quota periods that decrease over time', () => {

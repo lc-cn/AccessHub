@@ -5,6 +5,7 @@ type ParseResult<T> = { ok: true; value: T } | { ok: false; error: string }
 export type SubscriptionPlanPolicyInput = {
   name: string
   description: string
+  rank: number
   rateLimit: number
   dailyLimit: number
   weeklyLimit: number
@@ -30,11 +31,13 @@ export function parseSubscriptionPlanPolicyInput(body: Record<string, unknown>, 
   const dailyLimit = parseLimit(body.dailyLimit)
   const weeklyLimit = parseLimit(body.weeklyLimit)
   const monthlyLimit = parseLimit(body.monthlyLimit)
+  const rank = Number(body.rank ?? 0)
   if (!name) return { ok: false, error: '请输入订阅计划名称' }
   if (rateLimit == null || dailyLimit == null || weeklyLimit == null || monthlyLimit == null) return { ok: false, error: '配额必须为正整数或 -1（无限制）' }
+  if (!Number.isSafeInteger(rank) || rank < 0) return { ok: false, error: '计划阶梯必须是大于或等于 0 的整数' }
   if (invalidQuotaOrder(dailyLimit, weeklyLimit)) return { ok: false, error: '每周配额不能低于每日配额' }
   if (invalidQuotaOrder(dailyLimit, monthlyLimit) || invalidQuotaOrder(weeklyLimit, monthlyLimit)) return { ok: false, error: '每月配额不能低于较短周期配额' }
-  return { ok: true, value: { name, description: String(body.description || '').trim(), rateLimit, dailyLimit, weeklyLimit, monthlyLimit, isDefault: Boolean(body.isDefault) } }
+  return { ok: true, value: { name, description: String(body.description || '').trim(), rank, rateLimit, dailyLimit, weeklyLimit, monthlyLimit, isDefault: Boolean(body.isDefault) } }
 }
 
 export function parseBenefitInput(body: Record<string, unknown>, durationFallback?: { value: number; unit: EntitlementUnit }): ParseResult<BenefitInput> {

@@ -2,6 +2,7 @@ export type DashboardPlan = {
   id: string
   name: string
   description: string
+  rank: number
   rateLimit: number
   dailyLimit: number | null
   weeklyLimit: number | null
@@ -14,8 +15,10 @@ export type DashboardPlan = {
 export type DashboardData = {
   authenticated: boolean
   user: { id: string; name: string; image: string | null; role: string; createdAt: string } | null
-  currentPlan?: { planId: string; planName: string; rateLimit: number; dailyLimit: number | null; weeklyLimit: number | null; monthlyLimit: number | null; expiresAt: string | null } | null
+  currentPlan?: { planId: string; planName: string; rank: number; rateLimit: number; dailyLimit: number | null; weeklyLimit: number | null; monthlyLimit: number | null; expiresAt: string | null } | null
   usage?: { daily: number; weekly: number; monthly: number }
+  defaultPlan?: { planId: string; planName: string; rateLimit: number; dailyLimit: number | null; weeklyLimit: number | null; monthlyLimit: number | null } | null
+  defaultUsage?: { daily: number; weekly: number; monthly: number }
   activeBenefits?: number
   creditsRemaining?: number
   afdian?: { linked: boolean; oauthConfigured: boolean }

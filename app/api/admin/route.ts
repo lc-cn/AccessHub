@@ -30,7 +30,7 @@ export async function GET(request: Request) {
   const section = new URL(request.url).searchParams.get('section') || 'all'
   const wants = (...names: string[]) => section === 'all' || names.includes(section)
   const [plans, codes, mappings, orderRows, skuRows, users, logs] = await Promise.all([
-    db.select().from(subscriptionPlans).orderBy(asc(subscriptionPlans.createdAt)),
+    db.select().from(subscriptionPlans).orderBy(asc(subscriptionPlans.rank), asc(subscriptionPlans.createdAt)),
     wants('codes') ? db.select({
       id: redeemCodes.id, code: redeemCodes.code, kind: redeemCodes.kind,
       planId: redeemCodes.planId, planName: subscriptionPlans.name, credits: redeemCodes.credits,
@@ -89,6 +89,8 @@ export async function POST(request: Request) {
     const { name, ...policy } = parsed.value
     const [sameName] = await db.select({ id: subscriptionPlans.id }).from(subscriptionPlans).where(eq(subscriptionPlans.name, name)).limit(1)
     if (sameName) return NextResponse.json({ error: '订阅计划名称已存在' }, { status: 409 })
+    const [sameRank] = await db.select({ id: subscriptionPlans.id }).from(subscriptionPlans).where(eq(subscriptionPlans.rank, policy.rank)).limit(1)
+    if (sameRank) return NextResponse.json({ error: '计划阶梯等级已被占用' }, { status: 409 })
     const [existingPlan] = await db.select({ id: subscriptionPlans.id }).from(subscriptionPlans).limit(1)
     const [created] = await db.insert(subscriptionPlans).values({ id: randomUUID(), name, ...policy, isDefault: policy.isDefault || !existingPlan }).returning()
     if (created.isDefault) await db.update(subscriptionPlans).set({ isDefault: false }).where(and(eq(subscriptionPlans.isDefault, true), not(eq(subscriptionPlans.id, created.id))))
@@ -182,6 +184,8 @@ export async function PATCH(request: Request) {
   if (!target) return NextResponse.json({ error: '订阅计划不存在' }, { status: 404 })
   const [sameName] = await db.select({ id: subscriptionPlans.id }).from(subscriptionPlans).where(and(eq(subscriptionPlans.name, name), not(eq(subscriptionPlans.id, planId)))).limit(1)
   if (sameName) return NextResponse.json({ error: '订阅计划名称已存在' }, { status: 409 })
+  const [sameRank] = await db.select({ id: subscriptionPlans.id }).from(subscriptionPlans).where(and(eq(subscriptionPlans.rank, policy.rank), not(eq(subscriptionPlans.id, planId)))).limit(1)
+  if (sameRank) return NextResponse.json({ error: '计划阶梯等级已被占用' }, { status: 409 })
   if (body.isDefault) await db.update(subscriptionPlans).set({ isDefault: false }).where(and(eq(subscriptionPlans.isDefault, true), not(eq(subscriptionPlans.id, planId))))
   const [updated] = await db.update(subscriptionPlans).set({ name, ...policy, isDefault: target.isDefault || policy.isDefault, updatedAt: new Date() }).where(eq(subscriptionPlans.id, planId)).returning()
   await recordActivity({ actorId, action: 'plan.updated', resourceType: 'subscription_plan', resourceId: updated.id, detail: updated.name })
