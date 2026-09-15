@@ -10,6 +10,7 @@ import { GroupManagement } from './group-management'
 import { Overview } from './overview'
 import { RedeemCodes } from './redeem-codes'
 import type { DashboardData } from './types'
+import { useWorkspaceData } from './workspace-data'
 import { authClient } from '@/lib/auth-client'
 import { requestJson } from '@/lib/http-client'
 
@@ -40,31 +41,29 @@ const routeMeta: Record<WorkspaceRoute, { eyebrow: string; title: string; descri
 
 export function WorkspacePage({ route, resourceId }: Props) {
   const router = useRouter()
-  const [dashboard, setDashboard] = useState<DashboardData | null>(null)
-  const [dashboardError, setDashboardError] = useState('')
-  const [loading, setLoading] = useState(true)
+  const { dashboard, setDashboard, dashboardError, setDashboardError, loading, setLoading, clear } = useWorkspaceData()
   const [copied, setCopied] = useState(false)
   const loadDashboard = useCallback(async () => {
     setLoading(true); setDashboardError('')
     try { setDashboard(await requestJson<DashboardData>('/api/dashboard', { cache: 'no-store' })) }
     catch (error) {
-      if (error instanceof Error && 'status' in error && error.status === 401) return router.replace('/login')
+      if (error instanceof Error && 'status' in error && error.status === 401) { clear(); return router.replace('/login') }
       setDashboardError(error instanceof Error ? error.message : '暂时无法读取账户数据')
     } finally { setLoading(false) }
-  }, [router])
+  }, [clear, router, setDashboard, setDashboardError, setLoading])
   useEffect(() => { void loadDashboard() }, [loadDashboard])
   const user = dashboard?.user ?? null
   const isAdmin = user?.role === 'admin'
   const meta = routeMeta[route]
   const initializing = loading && !dashboard
   useEffect(() => { document.title = `${meta.title} · AccessHub`; if (!initializing && meta.admin && !isAdmin) router.replace('/dashboard') }, [initializing, isAdmin, meta, router])
-  const signOut = async () => { await authClient.signOut(); router.replace('/login'); router.refresh() }
+  const signOut = async () => { await authClient.signOut(); clear(); router.replace('/login'); router.refresh() }
   const signIn = async () => { await authClient.signIn.social({ provider: 'github', callbackURL: '/redeem-codes' }) }
   const copyId = async () => { if (!user?.id) return; await navigator.clipboard?.writeText(user.id); setCopied(true); setTimeout(() => setCopied(false), 1600) }
   const visibleNav = navItems.filter((item) => !item.admin || isAdmin)
 
   return <div className="min-h-screen bg-[#f3f6fb] text-[#172033]"><a href="#main-content" className="sr-only z-50 rounded-lg bg-white px-4 py-2 text-sm focus:not-sr-only focus:fixed focus:left-4 focus:top-4">跳到主要内容</a>
-    <aside className="fixed inset-y-0 left-0 z-20 hidden w-64 border-r border-[#e3e9f3] bg-white px-5 py-6 lg:flex lg:flex-col"><Brand/><nav className="mt-10 space-y-1" aria-label="主导航">{initializing ? [1, 2, 3, 4].map((item) => <span key={item} className="block h-11 animate-pulse rounded-xl bg-slate-50"/>) : visibleNav.map((item) => <NavLink key={item.href} item={item} route={route}/>)}</nav><div className="mt-auto rounded-[18px] bg-[#f4f6fa] p-3.5"><div className="flex items-center gap-3"><Avatar user={user}/><div className="min-w-0"><p className="truncate text-sm font-medium">{user?.name || '正在读取账户'}</p><p className="mt-0.5 truncate text-[11px] text-slate-400">{isAdmin ? '管理员' : '普通用户'}</p></div>{user && <button onClick={signOut} aria-label="退出登录" className="ml-auto rounded-lg p-2 text-slate-400 transition hover:bg-white hover:text-slate-600"><LogOut size={15}/></button>}</div></div></aside>
+    <aside className="fixed inset-y-0 left-0 z-20 hidden w-64 border-r border-[#e3e9f3] bg-white px-5 py-6 lg:flex lg:flex-col"><Brand/><nav className="mt-10 space-y-1" aria-label="主导航">{initializing ? [1, 2, 3, 4].map((item) => <span key={item} className="block h-11 animate-pulse rounded-xl bg-slate-50"/>) : visibleNav.map((item) => <NavLink key={item.href} item={item} route={route}/>)}</nav><div className="mt-auto rounded-[18px] bg-[#f4f6fa] p-3.5"><div className="flex items-center gap-3"><Avatar user={user}/><div className="min-w-0"><p className="truncate text-sm font-medium">{user?.name || '正在读取账户'}</p><p className="mt-0.5 truncate text-[11px] text-slate-400">{user ? isAdmin ? '管理员' : '普通用户' : '正在验证身份'}</p></div>{user && <button onClick={signOut} aria-label="退出登录" className="ml-auto rounded-lg p-2 text-slate-400 transition hover:bg-white hover:text-slate-600"><LogOut size={15}/></button>}</div></div></aside>
     <main id="main-content" className="min-h-screen lg:pl-64"><header className="sticky top-0 z-10 border-b border-[#e3e9f3] bg-white/90 backdrop-blur-xl"><div className="flex h-[76px] items-center justify-between px-5 sm:px-8 lg:px-10"><div><p className="text-[11px] font-medium tracking-[.12em] text-slate-400">{meta.eyebrow}</p><h1 className="mt-1 text-xl font-semibold tracking-tight">{meta.title}</h1></div><div className="flex items-center gap-2 sm:gap-3"><span className="mr-2 hidden items-center gap-2 text-xs text-slate-500 sm:flex"><span className={`size-2 rounded-full ${dashboardError ? 'bg-rose-500' : loading ? 'bg-amber-400' : 'bg-emerald-500'}`}/>{dashboardError ? '同步失败' : loading ? '同步中' : '数据已同步'}</span><button onClick={() => void loadDashboard()} disabled={loading} aria-label="刷新数据" className="grid size-9 place-items-center rounded-xl border border-slate-200 text-slate-500 transition hover:bg-slate-50 disabled:opacity-50"><RefreshCw size={15} className={loading ? 'animate-spin' : ''}/></button><div className="lg:hidden"><Avatar user={user}/></div></div></div>{!initializing && <nav className="flex gap-1 overflow-x-auto px-5 pb-3 lg:hidden" aria-label="移动端导航">{visibleNav.map((item) => <NavLink key={item.href} item={item} route={route} mobile/>)}</nav>}</header>
       <div className="mx-auto max-w-[1320px] px-5 pb-14 pt-8 sm:px-8 lg:px-10 lg:pt-10"><div className="mb-8"><p className="max-w-2xl text-sm leading-6 text-slate-500">{meta.description}</p>{dashboardError && <button onClick={() => void loadDashboard()} className="mt-3 rounded-lg bg-rose-50 px-3 py-2 text-xs text-rose-600">{dashboardError} 点击重试</button>}</div>{initializing || (meta.admin && !isAdmin) ? <WorkspaceSkeleton/> : <RouteContent route={route} resourceId={resourceId} dashboard={dashboard} loading={loading} copied={copied} refresh={loadDashboard} signIn={signIn} copyId={copyId} router={router}/>}</div>
     </main>

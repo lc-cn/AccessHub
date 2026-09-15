@@ -1,5 +1,6 @@
 import { Analytics } from '@vercel/analytics/next'
 import type { Metadata, Viewport } from 'next'
+import { WorkspaceDataProvider } from '@/components/access-hub/workspace-data'
 import './globals.css'
 
 export const metadata: Metadata = {
@@ -41,7 +42,7 @@ export default function RootLayout({
   return (
     <html lang="zh-CN">
       <body className="antialiased">
-        {children}
+        <WorkspaceDataProvider>{children}</WorkspaceDataProvider>
         {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>
     </html>

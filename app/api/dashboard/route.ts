@@ -6,6 +6,7 @@ import { auth } from '@/lib/auth'
 import { db } from '@/lib/db'
 import { account, apiUsage, creditGrants, groupMemberships, groups, user } from '@/lib/db/schema'
 import { AFDIAN_PROVIDER_ID, isAfdianOAuthConfigured } from '@/lib/afdian-oauth'
+import { countEffectiveGroupMembers } from '@/lib/group-member-counts'
 import { usagePeriodKeys } from '@/lib/usage-periods'
 
 export async function GET() {
@@ -13,9 +14,14 @@ export async function GET() {
   if (!session?.user) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
   const { today, weekStart, monthStart } = usagePeriodKeys()
   const dashboardGroups = alias(groups, 'dashboard_groups')
+  const now = new Date()
+  const activeAnyMembership = and(
+    lte(groupMemberships.startsAt, now),
+    or(isNull(groupMemberships.expiresAt), gt(groupMemberships.expiresAt, now)),
+  )
 
-  const groupRows = await db
-    .select({
+  const [rawGroupRows, [userCount], effectiveMemberships] = await Promise.all([
+    db.select({
       id: dashboardGroups.id,
       name: dashboardGroups.name,
       description: dashboardGroups.description,
@@ -24,34 +30,18 @@ export async function GET() {
       weeklyLimit: dashboardGroups.weeklyLimit,
       monthlyLimit: dashboardGroups.monthlyLimit,
       isDefault: dashboardGroups.isDefault,
-      memberCount: sql<number>`(
-        select count(*)::int
-        from ${user} as dashboard_user
-        where coalesce(
-          (
-            select dashboard_membership."groupId"
-            from ${groupMemberships} as dashboard_membership
-            where dashboard_membership."userId" = dashboard_user.id
-              and dashboard_membership."startsAt" <= now()
-              and (dashboard_membership."expiresAt" is null or dashboard_membership."expiresAt" > now())
-            order by dashboard_membership."startsAt" desc,
-              dashboard_membership."expiresAt" desc nulls first
-            limit 1
-          ),
-          (
-            select dashboard_default_group.id
-            from ${groups} as dashboard_default_group
-            where dashboard_default_group."isDefault" = true
-            order by dashboard_default_group."createdAt" asc
-            limit 1
-          )
-        ) = ${dashboardGroups.id}
-      )`.mapWith(Number),
     })
     .from(dashboardGroups)
-    .orderBy(desc(dashboardGroups.isDefault), dashboardGroups.createdAt)
+    .orderBy(desc(dashboardGroups.isDefault), dashboardGroups.createdAt),
+    db.select({ count: count() }).from(user),
+    db.selectDistinctOn([groupMemberships.userId], { userId: groupMemberships.userId, groupId: groupMemberships.groupId })
+      .from(groupMemberships)
+      .where(activeAnyMembership)
+      .orderBy(groupMemberships.userId, desc(groupMemberships.startsAt), sql`${groupMemberships.expiresAt} desc nulls first`),
+  ])
+  const memberCounts = countEffectiveGroupMembers({ groups: rawGroupRows, totalUsers: userCount?.count ?? 0, memberships: effectiveMemberships })
+  const groupRows = rawGroupRows.map((group) => ({ ...group, memberCount: memberCounts.get(group.id) ?? 0 }))
 
-  const now = new Date()
   const activeMembership = and(
     eq(groupMemberships.userId, session.user.id),
     lte(groupMemberships.startsAt, now),
