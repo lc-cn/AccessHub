@@ -7,6 +7,8 @@ import { ApiDocs } from './api-docs'
 import { CommerceResources } from './commerce-resources'
 import { Orders } from './orders'
 import { Skus } from './skus'
+import { Services } from './services'
+import { ServiceCatalog } from './service-catalog'
 import { SubscriptionPlanManagement } from './subscription-plans'
 import { Overview } from './overview'
 import { RedeemCodes } from './redeem-codes'
@@ -51,9 +53,11 @@ function RouteContent({ route, resourceId, dashboard, loading, copied, refresh, 
   const skus: Sku[] = []
   if (route === 'dashboard') return <Overview dashboard={dashboard} loading={loading} copied={copied} onCopyId={() => void copyId()} onNavigate={(view) => router.push(view === '兑换码' ? '/redeem-codes' : '/admin/plans')}/>
   if (route === 'redeem') return <RedeemCodes authenticated isAdmin={false} skus={skus} onChanged={refresh} onSignIn={signIn} mode="redeem"/>
+  if (route === 'catalog' || route === 'catalog-service' || route === 'catalog-api') return <ServiceCatalog mode={route === 'catalog' ? 'list' : route === 'catalog-service' ? 'service' : 'api'} resourceId={resourceId}/>
   if (route === 'codes' || route === 'codes-new') return <RedeemCodes authenticated isAdmin skus={skus} onChanged={refresh} onSignIn={signIn} mode={route === 'codes' ? 'list' : 'new'}/>
   if (route === 'plans' || route === 'plans-new' || route === 'plans-edit') return <SubscriptionPlanManagement plans={plans} onChanged={refresh} mode={route === 'plans' ? 'list' : route === 'plans-new' ? 'new' : 'edit'} planId={resourceId}/>
   if (route === 'skus' || route === 'skus-new' || route === 'skus-edit') return <Skus plans={plans} mode={route === 'skus' ? 'list' : route === 'skus-new' ? 'new' : 'edit'} skuId={resourceId}/>
+  if (route === 'services' || route === 'services-new' || route === 'services-edit' || route === 'service-api-new' || route === 'service-api-edit') return <Services mode={route === 'services' ? 'list' : route === 'services-new' ? 'new' : route === 'services-edit' ? 'edit' : route === 'service-api-new' ? 'api-new' : 'api-edit'} resourceId={resourceId}/>
   if (route === 'subscriptions' || route === 'payments' || route === 'users' || route === 'logs' || route === 'afdian-events') return <CommerceResources resource={route}/>
   if (route === 'orders' || route === 'order-detail') return <Orders mode={route === 'orders' ? 'list' : 'detail'} orderId={resourceId}/>
   if (route === 'afdian' || route === 'afdian-new' || route === 'afdian-edit') return <AfdianMappings skus={skus} mode={route === 'afdian' ? 'list' : route === 'afdian-new' ? 'new' : 'edit'} mappingId={resourceId}/>

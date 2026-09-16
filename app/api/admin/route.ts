@@ -1,13 +1,14 @@
 import { randomBytes, randomUUID } from 'node:crypto'
 import { headers } from 'next/headers'
 import { NextResponse } from 'next/server'
-import { and, asc, desc, eq, inArray, not } from 'drizzle-orm'
+import { and, asc, desc, eq, inArray, not, sql } from 'drizzle-orm'
 import { auth } from '@/lib/auth'
 import { recordActivity } from '@/lib/activity-log'
 import { parseBenefitInput, parseSubscriptionPlanPolicyInput } from '@/lib/admin-entitlements'
 import { db } from '@/lib/db'
-import { activityLogs, orders, payments, providerEvents, providerOfferMappings, redeemCodes, skus, subscriptionPlans, subscriptions, user } from '@/lib/db/schema'
+import { activityLogs, apiServices, orders, payments, providerEvents, providerOfferMappings, redeemCodes, serviceApis, skus, subscriptionPlans, subscriptions, user } from '@/lib/db/schema'
 import { legacyDurationDays, parsePositiveInteger } from '@/lib/entitlements'
+import { parseServiceApiInput, parseServiceAuthInput, parseServiceInput, sealServiceAuth } from '@/lib/api-services'
 import { subscriptionStatuses, type SubscriptionStatus } from '@/lib/subscription-state'
 import { expireDueSubscriptions, transitionSubscription } from '@/lib/subscription-service'
 
@@ -75,8 +76,12 @@ export async function GET(request: Request) {
     wants('payments') ? db.select({ id: payments.id, orderId: payments.orderId, providerId: payments.providerId, externalPaymentId: payments.externalPaymentId, status: payments.status, amount: payments.amount, currency: payments.currency, paidAt: payments.paidAt, createdAt: payments.createdAt }).from(payments).orderBy(desc(payments.createdAt)).limit(500) : Promise.resolve([]),
     wants('logs', 'afdian-events') ? db.select({ id: providerEvents.id, providerId: providerEvents.providerId, externalEventId: providerEvents.externalEventId, type: providerEvents.type, status: providerEvents.status, error: providerEvents.error, processedAt: providerEvents.processedAt, createdAt: providerEvents.createdAt }).from(providerEvents).where(section === 'afdian-events' ? eq(providerEvents.providerId, 'psp-afdian') : undefined).orderBy(desc(providerEvents.createdAt)).limit(500) : Promise.resolve([]),
   ])
+  const [serviceRows, serviceApiRows] = await Promise.all([
+    wants('services') ? db.select({ id: apiServices.id, code: apiServices.code, name: apiServices.name, description: apiServices.description, baseUrl: apiServices.baseUrl, authType: apiServices.authType, authConfigured: sql<boolean>`${apiServices.authConfigEncrypted} is not null`, enabled: apiServices.enabled, createdAt: apiServices.createdAt, updatedAt: apiServices.updatedAt }).from(apiServices).orderBy(desc(apiServices.updatedAt)) : Promise.resolve([]),
+    wants('services') ? db.select().from(serviceApis).orderBy(asc(serviceApis.serviceId), asc(serviceApis.createdAt)) : Promise.resolve([]),
+  ])
   const fulfilledOrders = orderRows.filter((order) => section !== 'afdian-orders' || order.providerId === 'psp-afdian').map((order) => ({ ...order, codes: orderCodes.filter((code) => code.orderId === order.id) }))
-  return NextResponse.json({ plans, codes, afdianMappings: mappings, orders: fulfilledOrders, skus: skuRows, users, logs, subscriptions: subscriptionRows, payments: paymentRows, providerEvents: eventRows, afadianWebhookConfigured: Boolean(process.env.AFDIAN_WEBHOOK_SECRET), afadianMessengerConfigured: Boolean(process.env.AFDIAN_USER_ID && process.env.AFDIAN_ADMIN_TOKEN) })
+  return NextResponse.json({ plans, codes, afdianMappings: mappings, orders: fulfilledOrders, skus: skuRows, users, logs, subscriptions: subscriptionRows, payments: paymentRows, providerEvents: eventRows, services: serviceRows.map((service) => ({ ...service, apis: serviceApiRows.filter((api) => api.serviceId === service.id) })), afadianWebhookConfigured: Boolean(process.env.AFDIAN_WEBHOOK_SECRET), afadianMessengerConfigured: Boolean(process.env.AFDIAN_USER_ID && process.env.AFDIAN_ADMIN_TOKEN) })
 }
 
 export async function POST(request: Request) {
@@ -140,6 +145,32 @@ export async function POST(request: Request) {
     await recordActivity({ actorId, action: 'provider_mapping.saved', resourceType: 'offer_mapping', resourceId: mapping.id, detail: `afdian:${externalOfferType}:${externalOfferId} -> ${skuId}` })
     return NextResponse.json({ mapping })
   }
+  if (body.type === 'service') {
+    const parsed = parseServiceInput(body)
+    if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 })
+    const auth = parseServiceAuthInput(parsed.value.authType, body)
+    if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: 400 })
+    const [sameCode] = await db.select({ id: apiServices.id }).from(apiServices).where(eq(apiServices.code, parsed.value.code)).limit(1)
+    if (sameCode) return NextResponse.json({ error: '服务编码已存在' }, { status: 409 })
+    let authConfigEncrypted: string | null = null
+    try { authConfigEncrypted = auth.value ? sealServiceAuth(auth.value) : null }
+    catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : '服务鉴权配置加密失败' }, { status: 503 }) }
+    const [created] = await db.insert(apiServices).values({ id: randomUUID(), ...parsed.value, authConfigEncrypted }).returning()
+    await recordActivity({ actorId, action: 'api_service.created', resourceType: 'api_service', resourceId: created.id, detail: `${created.code} ${created.name}` })
+    return NextResponse.json({ service: { ...created, authConfigEncrypted: undefined, authConfigured: Boolean(created.authConfigEncrypted), apis: [] } })
+  }
+  if (body.type === 'service-api') {
+    const serviceId = String(body.serviceId || '')
+    const parsed = parseServiceApiInput(body)
+    if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 })
+    const [service] = await db.select({ id: apiServices.id }).from(apiServices).where(eq(apiServices.id, serviceId)).limit(1)
+    if (!service) return NextResponse.json({ error: '服务不存在' }, { status: 404 })
+    const [sameCode] = await db.select({ id: serviceApis.id }).from(serviceApis).where(and(eq(serviceApis.serviceId, serviceId), eq(serviceApis.code, parsed.value.code))).limit(1)
+    if (sameCode) return NextResponse.json({ error: '该服务下的 API 编码已存在' }, { status: 409 })
+    const [created] = await db.insert(serviceApis).values({ id: randomUUID(), serviceId, ...parsed.value }).returning()
+    await recordActivity({ actorId, action: 'service_api.created', resourceType: 'service_api', resourceId: created.id, detail: `${serviceId}:${created.code}` })
+    return NextResponse.json({ api: created })
+  }
   return NextResponse.json({ error: '未知操作' }, { status: 400 })
 }
 
@@ -173,6 +204,39 @@ export async function PATCH(request: Request) {
     if (!updated) return NextResponse.json({ error: 'SKU 不存在' }, { status: 404 })
     await recordActivity({ actorId, action: 'sku.updated', resourceType: 'sku', resourceId: updated.id, detail: `${updated.code} ${updated.name}` })
     return NextResponse.json({ sku: updated })
+  }
+  if (body.type === 'service') {
+    const serviceId = String(body.serviceId || '')
+    const parsed = parseServiceInput(body)
+    if (!serviceId || !parsed.ok) return NextResponse.json({ error: parsed.ok ? '服务不能为空' : parsed.error }, { status: 400 })
+    const [existing] = await db.select().from(apiServices).where(eq(apiServices.id, serviceId)).limit(1)
+    if (!existing) return NextResponse.json({ error: '服务不存在' }, { status: 404 })
+    const [sameCode] = await db.select({ id: apiServices.id }).from(apiServices).where(and(eq(apiServices.code, parsed.value.code), not(eq(apiServices.id, serviceId)))).limit(1)
+    if (sameCode) return NextResponse.json({ error: '服务编码已存在' }, { status: 409 })
+    const credentialsChanged = ['authToken', 'authValue', 'authPassword'].some((key) => String(body[key] || '').length > 0)
+    let authConfigEncrypted = existing.authConfigEncrypted
+    if (parsed.value.authType === 'none') authConfigEncrypted = null
+    else if (credentialsChanged || parsed.value.authType !== existing.authType || !existing.authConfigEncrypted) {
+      const auth = parseServiceAuthInput(parsed.value.authType, body)
+      if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: 400 })
+      try { authConfigEncrypted = auth.value ? sealServiceAuth(auth.value) : null }
+      catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : '服务鉴权配置加密失败' }, { status: 503 }) }
+    }
+    const [updated] = await db.update(apiServices).set({ ...parsed.value, authConfigEncrypted, updatedAt: new Date() }).where(eq(apiServices.id, serviceId)).returning()
+    await recordActivity({ actorId, action: 'api_service.updated', resourceType: 'api_service', resourceId: updated.id, detail: `${updated.code} ${updated.name}` })
+    return NextResponse.json({ service: { ...updated, authConfigEncrypted: undefined, authConfigured: Boolean(updated.authConfigEncrypted) } })
+  }
+  if (body.type === 'service-api') {
+    const serviceId = String(body.serviceId || '')
+    const apiId = String(body.apiId || '')
+    const parsed = parseServiceApiInput(body)
+    if (!serviceId || !apiId || !parsed.ok) return NextResponse.json({ error: parsed.ok ? 'API 信息不完整' : parsed.error }, { status: 400 })
+    const [sameCode] = await db.select({ id: serviceApis.id }).from(serviceApis).where(and(eq(serviceApis.serviceId, serviceId), eq(serviceApis.code, parsed.value.code), not(eq(serviceApis.id, apiId)))).limit(1)
+    if (sameCode) return NextResponse.json({ error: '该服务下的 API 编码已存在' }, { status: 409 })
+    const [updated] = await db.update(serviceApis).set({ ...parsed.value, updatedAt: new Date() }).where(and(eq(serviceApis.id, apiId), eq(serviceApis.serviceId, serviceId))).returning()
+    if (!updated) return NextResponse.json({ error: 'API 不存在' }, { status: 404 })
+    await recordActivity({ actorId, action: 'service_api.updated', resourceType: 'service_api', resourceId: updated.id, detail: `${serviceId}:${updated.code}` })
+    return NextResponse.json({ api: updated })
   }
   if (body.type !== 'plan') return NextResponse.json({ error: '未知操作' }, { status: 400 })
   const planId = String(body.planId || '')

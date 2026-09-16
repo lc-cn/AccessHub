@@ -13,9 +13,10 @@ import {
   UserRound,
   Users,
   Webhook,
+  Waypoints,
 } from 'lucide-react'
 
-export type WorkspaceRoute = 'dashboard' | 'redeem' | 'codes' | 'codes-new' | 'plans' | 'plans-new' | 'plans-edit' | 'skus' | 'skus-new' | 'skus-edit' | 'subscriptions' | 'orders' | 'order-detail' | 'payments' | 'users' | 'logs' | 'afdian' | 'afdian-new' | 'afdian-edit' | 'afdian-orders' | 'afdian-order-detail' | 'afdian-events' | 'docs'
+export type WorkspaceRoute = 'dashboard' | 'redeem' | 'catalog' | 'catalog-service' | 'catalog-api' | 'codes' | 'codes-new' | 'plans' | 'plans-new' | 'plans-edit' | 'skus' | 'skus-new' | 'skus-edit' | 'services' | 'services-new' | 'services-edit' | 'service-api-new' | 'service-api-edit' | 'subscriptions' | 'orders' | 'order-detail' | 'payments' | 'users' | 'logs' | 'afdian' | 'afdian-new' | 'afdian-edit' | 'afdian-orders' | 'afdian-order-detail' | 'afdian-events' | 'docs'
 
 export type WorkspaceNavItem = {
   label: string
@@ -33,9 +34,17 @@ export type WorkspaceNavGroup = {
 
 export const workspaceNavGroups: WorkspaceNavGroup[] = [
   {
+    label: 'API 网关',
+    admin: true,
+    items: [
+      { label: '服务', description: '上游服务与 API', href: '/admin/services', active: ['services', 'services-new', 'services-edit', 'service-api-new', 'service-api-edit'], icon: Waypoints },
+    ],
+  },
+  {
     label: '我的空间',
     items: [
       { label: '概览', description: '权益、用量与升级', href: '/dashboard', active: ['dashboard'], icon: LayoutDashboard },
+      { label: '服务中心', description: '浏览并测试可用 API', href: '/services', active: ['catalog', 'catalog-service', 'catalog-api'], icon: Waypoints },
       { label: '兑换权益', description: '核销爱发电兑换码', href: '/redeem-codes', active: ['redeem'], icon: Ticket },
       { label: '个人中心', description: '账户、安全与订单', href: '/account', active: [], icon: UserRound },
       { label: 'API 文档', description: '接口与调用示例', href: '/api-docs', active: ['docs'], icon: BookOpen },
@@ -81,6 +90,9 @@ export const workspaceNavGroups: WorkspaceNavGroup[] = [
 export const workspaceRouteMeta: Record<WorkspaceRoute, { eyebrow: string; title: string; description: string; admin?: boolean }> = {
   dashboard: { eyebrow: '我的空间', title: '概览', description: '查看账户、访问权益与今天的 API 使用情况。' },
   redeem: { eyebrow: '我的空间 / 权益', title: '兑换权益', description: '核销兑换码，权益将立即加入当前账户。' },
+  catalog: { eyebrow: '服务中心', title: '可用服务', description: '浏览当前账户可以通过 AccessHub 网关调用的真实 API 服务。' },
+  'catalog-service': { eyebrow: '服务中心 / 服务', title: '服务详情', description: '查看服务能力及其公开 API 端点。' },
+  'catalog-api': { eyebrow: '服务中心 / API', title: 'API 详情', description: '查看请求契约、计费次数并发起一次测试调用。' },
   codes: { eyebrow: '商品与权益 / 兑换码', title: '兑换码台账', description: '查询、筛选并追踪已经签发的兑换码。', admin: true },
   'codes-new': { eyebrow: '商品与权益 / 兑换码', title: '生成兑换码', description: '根据 SKU 签发一批订阅权益或 Credits 兑换码。', admin: true },
   plans: { eyebrow: '商品与权益 / 策略', title: '订阅计划', description: '管理访问频率、周期配额与默认兜底策略。', admin: true },
@@ -89,6 +101,11 @@ export const workspaceRouteMeta: Record<WorkspaceRoute, { eyebrow: string; title
   skus: { eyebrow: '商品与权益 / 目录', title: 'SKU 目录', description: '维护平台可售权益；支付服务商只映射到 SKU。', admin: true },
   'skus-new': { eyebrow: '商品与权益 / SKU', title: '新增 SKU', description: '创建计划商品或 Credits 增量包。', admin: true },
   'skus-edit': { eyebrow: '商品与权益 / SKU', title: '编辑 SKU', description: '调整商品定义、权益周期与在售状态。', admin: true },
+  services: { eyebrow: 'API 网关 / 服务', title: '服务', description: '配置真实上游服务、鉴权信息和可供用户调用的 API。', admin: true },
+  'services-new': { eyebrow: 'API 网关 / 服务', title: '新增服务', description: '连接一个真实上游服务并安全保存鉴权信息。', admin: true },
+  'services-edit': { eyebrow: 'API 网关 / 服务', title: '服务详情', description: '维护服务连接、鉴权方式及其 API 目录。', admin: true },
+  'service-api-new': { eyebrow: 'API 网关 / 服务 / API', title: '新增 API', description: '定义请求方式、参数、超时与单次计费次数。', admin: true },
+  'service-api-edit': { eyebrow: 'API 网关 / 服务 / API', title: '编辑 API', description: '调整端点路由、参数契约和计费规则。', admin: true },
   subscriptions: { eyebrow: '商业中心 / 生命周期', title: '订阅', description: '查看独立于支付服务商的订阅状态机。', admin: true },
   orders: { eyebrow: '商业中心 / 交易', title: '订单', description: '查看各支付服务商产生的统一订单。', admin: true },
   'order-detail': { eyebrow: '商业中心 / 订单', title: '订单详情', description: '查看支付、SKU、交付和核销闭环。', admin: true },

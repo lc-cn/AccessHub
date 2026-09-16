@@ -24,6 +24,14 @@ Open [http://localhost:3000](http://localhost:3000) with your browser to see the
 
 The application expects `DATABASE_URL`, `BETTER_AUTH_SECRET`, `GITHUB_CLIENT_ID`, and `GITHUB_CLIENT_SECRET`. Set `NEXT_PUBLIC_AFDIAN_URL` to the creator page used by the generic upgrade call to action.
 
+API service credentials are encrypted at rest with `SERVICE_CREDENTIALS_KEY`. Generate a dedicated random value locally and configure the same value in every runtime environment; rotating it invalidates existing encrypted upstream credentials. Do not commit it:
+
+```bash
+openssl rand -base64 48 | vercel env add SERVICE_CREDENTIALS_KEY production --sensitive
+```
+
+Administrators define upstream services under `/admin/services`, then publish endpoints at `/api/gateway/<service-code>/<api-code>`. The gateway validates the configured parameter allow-list, reserves the endpoint's configured usage units, injects upstream authentication server-side, and does not follow upstream redirects.
+
 Email/password authentication is enabled only when SMTP delivery is completely configured. Set `SMTP_HOST`, `SMTP_FROM`, and, when authentication is required, both `SMTP_USER` and `SMTP_PASS`. Optional settings are `SMTP_PORT` (default `587`), `SMTP_SECURE` (default `false`), and `FRESH_SESSION_MAX_AGE_MINUTES` (default `15`). See [docs/smtp-deployment.md](docs/smtp-deployment.md) for deployment behavior; do not commit secret values.
 
 To enable Afdian account linking, also configure `AFDIAN_OAUTH_CLIENT_ID`, `AFDIAN_OAUTH_CLIENT_SECRET`, and the canonical `BETTER_AUTH_URL` (for production, `https://www.l2cl.link`). Register this OAuth callback URL with Afdian:
