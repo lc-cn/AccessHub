@@ -1,3 +1,4 @@
 declare module 'cloudflare:workers' {
-  export const env: Record<string, unknown>
+  type ServiceBinding = { fetch(request: Request): Promise<Response> }
+  export const env: Record<string, unknown> & { QQSIGN: ServiceBinding }
 }

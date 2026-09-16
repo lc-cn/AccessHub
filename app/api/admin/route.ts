@@ -11,6 +11,7 @@ import { legacyDurationDays, parsePositiveInteger } from '@/lib/entitlements'
 import { parseServiceApiInput, parseServiceAuthInput, parseServiceInput, sealServiceAuth } from '@/lib/api-services'
 import { subscriptionStatuses, type SubscriptionStatus } from '@/lib/subscription-state'
 import { transitionSubscription } from '@/lib/subscription-service'
+import { hasWorkerServiceBinding, workerServiceBindings } from '@/lib/worker-service-bindings'
 
 async function requireAdmin() {
   const session = await auth.api.getSession({ headers: await headers() })
@@ -81,7 +82,7 @@ export async function GET(request: Request) {
       wants('services') ? db.select().from(serviceApis).orderBy(asc(serviceApis.serviceId), asc(serviceApis.createdAt)) : Promise.resolve([]),
     ])
     const fulfilledOrders = orderRows.filter((order) => section !== 'afdian-orders' || order.providerId === 'psp-afdian').map((order) => ({ ...order, codes: orderCodes.filter((code) => code.orderId === order.id) }))
-    return NextResponse.json({ plans, codes, afdianMappings: mappings, orders: fulfilledOrders, skus: skuRows, users, logs, subscriptions: subscriptionRows, payments: paymentRows, providerEvents: eventRows, services: serviceRows.map((service) => ({ ...service, apis: serviceApiRows.filter((api) => api.serviceId === service.id) })), afadianWebhookConfigured: Boolean(process.env.AFDIAN_WEBHOOK_SECRET), afadianMessengerConfigured: Boolean(process.env.AFDIAN_USER_ID && process.env.AFDIAN_ADMIN_TOKEN) })
+    return NextResponse.json({ plans, codes, afdianMappings: mappings, orders: fulfilledOrders, skus: skuRows, users, logs, subscriptions: subscriptionRows, payments: paymentRows, providerEvents: eventRows, services: serviceRows.map((service) => ({ ...service, apis: serviceApiRows.filter((api) => api.serviceId === service.id) })), workerBindings: wants('services') ? workerServiceBindings : [], afadianWebhookConfigured: Boolean(process.env.AFDIAN_WEBHOOK_SECRET), afadianMessengerConfigured: Boolean(process.env.AFDIAN_USER_ID && process.env.AFDIAN_ADMIN_TOKEN) })
   })
 }
 
@@ -149,6 +150,7 @@ export async function POST(request: Request) {
   if (body.type === 'service') {
     const parsed = parseServiceInput(body)
     if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 })
+    if (parsed.value.transport === 'worker_binding' && !hasWorkerServiceBinding(parsed.value.bindingName)) return NextResponse.json({ error: '请选择当前部署中已配置的 Worker 服务' }, { status: 400 })
     const auth = parseServiceAuthInput(parsed.value.authType, body)
     if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: 400 })
     const [sameCode] = await db.select({ id: apiServices.id }).from(apiServices).where(eq(apiServices.code, parsed.value.code)).limit(1)
@@ -210,6 +212,7 @@ export async function PATCH(request: Request) {
     const serviceId = String(body.serviceId || '')
     const parsed = parseServiceInput(body)
     if (!serviceId || !parsed.ok) return NextResponse.json({ error: parsed.ok ? '服务不能为空' : parsed.error }, { status: 400 })
+    if (parsed.value.transport === 'worker_binding' && !hasWorkerServiceBinding(parsed.value.bindingName)) return NextResponse.json({ error: '请选择当前部署中已配置的 Worker 服务' }, { status: 400 })
     const [existing] = await db.select().from(apiServices).where(eq(apiServices.id, serviceId)).limit(1)
     if (!existing) return NextResponse.json({ error: '服务不存在' }, { status: 404 })
     const [sameCode] = await db.select({ id: apiServices.id }).from(apiServices).where(and(eq(apiServices.code, parsed.value.code), not(eq(apiServices.id, serviceId)))).limit(1)
