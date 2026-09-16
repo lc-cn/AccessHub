@@ -1,10 +1,11 @@
-import { joinServiceUrl, serviceAuthHeaders, type ServiceAuthType, type ServiceParameter } from './api-services.ts'
+import { applyServiceQueryAuth, joinServiceUrl, serviceAuthHeaders, type ServiceAuthType, type ServiceParameter } from './api-services.ts'
 
 export async function prepareUpstreamRequest(request: Request, baseUrl: string, path: string, parameters: ServiceParameter[], authType: ServiceAuthType, encryptedAuth: string | null) {
   try {
     const incoming = new URL(request.url)
     const target = joinServiceUrl(baseUrl, path)
     const outboundHeaders = serviceAuthHeaders(authType, encryptedAuth)
+    applyServiceQueryAuth(target, authType, encryptedAuth)
     const contentType = request.headers.get('content-type')
     const accept = request.headers.get('accept')
     if (contentType) outboundHeaders.set('content-type', contentType)
@@ -30,9 +31,12 @@ export async function prepareUpstreamRequest(request: Request, baseUrl: string, 
         target.pathname = target.pathname.replace(marker, encodeURIComponent(String(raw)))
       } else if (parameter.location === 'header') {
         const normalized = parameter.name.toLowerCase()
-        if (['host', 'cookie', 'set-cookie', 'connection', 'content-length', 'transfer-encoding'].includes(normalized) || outboundHeaders.has(parameter.name)) return { ok: false, error: `Header ${parameter.name} 由网关保留` } as const
+        if (['authorization', 'host', 'cookie', 'set-cookie', 'connection', 'content-length', 'transfer-encoding'].includes(normalized) || outboundHeaders.has(parameter.name)) return { ok: false, error: `Header ${parameter.name} 由网关保留` } as const
         outboundHeaders.set(parameter.name, String(raw))
-      } else if (parameter.location === 'query') target.searchParams.append(parameter.name, String(raw))
+      } else if (parameter.location === 'query') {
+        if (target.searchParams.has(parameter.name)) return { ok: false, error: `Query 参数 ${parameter.name} 由网关保留` } as const
+        target.searchParams.append(parameter.name, String(raw))
+      }
     }
     const bodyParameters = parameters.filter((item) => item.location === 'body')
     const filteredBody = jsonBody && bodyParameters.length ? Object.fromEntries(bodyParameters.filter((item) => jsonBody?.[item.name] !== undefined).map((item) => [item.name, jsonBody?.[item.name]])) : null

@@ -32,6 +32,26 @@ test('does not let user parameters override service authentication', async () =>
   }
 })
 
+test('does not forward a gateway API key to an unauthenticated upstream', async () => {
+  const request = new Request('https://access.example/api/gateway/demo/chat', { headers: { authorization: 'Bearer ahk_user-secret' } })
+  const result = await prepareUpstreamRequest(request, 'https://upstream.example', '/chat', [{ name: 'authorization', location: 'header', dataType: 'string', required: true, description: '' }], 'none', null)
+  assert.deepEqual(result, { ok: false, error: 'Header authorization 由网关保留' })
+})
+
+test('does not let request query parameters override service query authentication', async () => {
+  const original = process.env.SERVICE_CREDENTIALS_KEY
+  process.env.SERVICE_CREDENTIALS_KEY = 'test-only-service-credential-key-32-bytes'
+  try {
+    const encrypted = sealServiceAuth({ query: 'api_key', value: 'upstream-secret' })
+    const request = new Request('https://access.example/api/gateway/demo/chat?api_key=attacker')
+    const result = await prepareUpstreamRequest(request, 'https://upstream.example', '/chat', [{ name: 'api_key', location: 'query', dataType: 'string', required: true, description: '' }], 'query', encrypted)
+    assert.deepEqual(result, { ok: false, error: 'Query 参数 api_key 由网关保留' })
+  } finally {
+    if (original == null) delete process.env.SERVICE_CREDENTIALS_KEY
+    else process.env.SERVICE_CREDENTIALS_KEY = original
+  }
+})
+
 test('rejects a missing required parameter before reserving usage', async () => {
   const request = new Request('https://access.example/api/gateway/demo/chat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })
   const result = await prepareUpstreamRequest(request, 'https://upstream.example', '/users/{id}/chat', parameters, 'none', null)

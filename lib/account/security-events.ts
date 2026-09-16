@@ -11,6 +11,8 @@ export type SecurityAction =
   | 'account.sessions.revoked_all'
   | 'account.identity.unlinked'
   | 'account.identity.linked'
+  | 'account.api_key.created'
+  | 'account.api_key.revoked'
 
 export type SecurityEvent = {
   actorId: string

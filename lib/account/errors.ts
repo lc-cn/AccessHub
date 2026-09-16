@@ -6,6 +6,7 @@ export type AccountErrorCode =
   | 'rate_limit_exceeded'
   | 'verification_expired'
   | 'session_not_found'
+  | 'api_key_not_found'
   | 'unauthorized'
 
 export class AccountError extends Error {

@@ -1,7 +1,7 @@
 import { createCipheriv, createDecipheriv, randomBytes, createHash } from 'node:crypto'
 import { isIP } from 'node:net'
 
-export const serviceAuthTypes = ['none', 'bearer', 'header', 'basic'] as const
+export const serviceAuthTypes = ['none', 'bearer', 'header', 'query', 'basic'] as const
 export const serviceApiMethods = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'] as const
 export const parameterLocations = ['query', 'header', 'path', 'body'] as const
 export const parameterDataTypes = ['string', 'number', 'boolean', 'json'] as const
@@ -9,7 +9,7 @@ export const parameterDataTypes = ['string', 'number', 'boolean', 'json'] as con
 export type ServiceAuthType = typeof serviceAuthTypes[number]
 export type ServiceApiMethod = typeof serviceApiMethods[number]
 export type ServiceParameter = { name: string; location: typeof parameterLocations[number]; dataType: typeof parameterDataTypes[number]; required: boolean; description: string }
-export type ServiceAuthConfig = { token?: string; header?: string; value?: string; username?: string; password?: string }
+export type ServiceAuthConfig = { token?: string; header?: string; query?: string; value?: string; username?: string; password?: string }
 
 type Result<T> = { ok: true; value: T } | { ok: false; error: string }
 
@@ -62,6 +62,12 @@ export function parseServiceAuthInput(authType: ServiceAuthType, body: Record<st
     if (!header || !/^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/.test(header)) return { ok: false, error: '请输入有效的鉴权 Header 名称' }
     return value ? { ok: true, value: { header, value } } : { ok: false, error: '请输入鉴权 Header 值' }
   }
+  if (authType === 'query') {
+    const query = String(body.authQuery || '').trim()
+    const value = String(body.authValue || '').trim()
+    if (!query || !/^[A-Za-z0-9_.-]+$/.test(query)) return { ok: false, error: '请输入有效的鉴权 Query 参数名' }
+    return value ? { ok: true, value: { query, value } } : { ok: false, error: '请输入鉴权 Query 参数值' }
+  }
   const username = String(body.authUsername || '').trim()
   const password = String(body.authPassword || '')
   return username && password ? { ok: true, value: { username, password } } : { ok: false, error: '请输入 Basic Auth 用户名和密码' }
@@ -84,7 +90,7 @@ export function openServiceAuth(value: string): ServiceAuthConfig {
 }
 
 export function serviceAuthHeaders(type: ServiceAuthType, encrypted: string | null) {
-  if (type === 'none') return new Headers()
+  if (type === 'none' || type === 'query') return new Headers()
   if (!encrypted) throw new Error('服务鉴权信息未配置')
   const config = openServiceAuth(encrypted)
   const headers = new Headers()
@@ -93,6 +99,14 @@ export function serviceAuthHeaders(type: ServiceAuthType, encrypted: string | nu
   else if (type === 'basic' && config.username != null && config.password != null) headers.set('authorization', `Basic ${Buffer.from(`${config.username}:${config.password}`).toString('base64')}`)
   else throw new Error('服务鉴权信息不完整')
   return headers
+}
+
+export function applyServiceQueryAuth(target: URL, type: ServiceAuthType, encrypted: string | null) {
+  if (type !== 'query') return
+  if (!encrypted) throw new Error('服务鉴权信息未配置')
+  const config = openServiceAuth(encrypted)
+  if (!config.query || config.value == null) throw new Error('服务 Query 鉴权信息不完整')
+  target.searchParams.set(config.query, config.value)
 }
 
 export function joinServiceUrl(baseUrl: string, path: string) {

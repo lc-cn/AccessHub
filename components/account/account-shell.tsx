@@ -3,13 +3,14 @@
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useState } from 'react'
-import { Activity, ArrowLeft, BadgeCheck, CreditCard, Link2, LogOut, Menu, ReceiptText, ShieldCheck, UserRound, X, Zap } from 'lucide-react'
+import { Activity, ArrowLeft, BadgeCheck, CreditCard, KeyRound, Link2, LogOut, Menu, ReceiptText, ShieldCheck, UserRound, X, Zap } from 'lucide-react'
 import { authClient } from '@/lib/auth-client'
 
 const items = [
   { href: '/account', label: '账户概览', description: '账户状态与常用操作', icon: UserRound },
   { href: '/account/profile', label: '个人资料', description: '名称、邮箱与头像', icon: BadgeCheck },
   { href: '/account/security', label: '登录与安全', description: '密码、会话与验证', icon: ShieldCheck },
+  { href: '/account/api-keys', label: 'API Keys', description: '程序调用凭据', icon: KeyRound },
   { href: '/account/connections', label: '账号绑定', description: 'GitHub 与爱发电', icon: Link2 },
   { href: '/account/entitlements', label: '我的权益', description: '计划、Credits 与有效期', icon: CreditCard },
   { href: '/account/usage', label: '用量明细', description: '周期配额消耗', icon: Activity },

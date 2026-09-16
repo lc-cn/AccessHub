@@ -30,7 +30,15 @@ API service credentials are encrypted at rest with `SERVICE_CREDENTIALS_KEY`. Ge
 openssl rand -base64 48 | vercel env add SERVICE_CREDENTIALS_KEY production --sensitive
 ```
 
-Administrators define upstream services under `/admin/services`, then publish endpoints at `/api/gateway/<service-code>/<api-code>`. The gateway validates the configured parameter allow-list, reserves the endpoint's configured usage units, injects upstream authentication server-side, and does not follow upstream redirects.
+Administrators define upstream services under `/admin/services`, then publish endpoints at `/api/gateway/<service-code>/<api-code>`. Upstream authentication supports Bearer, custom Header, Query parameter, and Basic Auth. The gateway validates the configured parameter allow-list, reserves the endpoint's configured usage units, injects upstream authentication server-side, and does not follow upstream redirects.
+
+Users create scoped personal API keys under `/account/api-keys`. The complete key is returned once; only its SHA-256 hash is stored. Programmatic clients call the gateway with:
+
+```text
+Authorization: Bearer ahk_...
+```
+
+API keys may be limited to selected services and can be revoked immediately. Browser-based testing under `/services` continues to use the signed-in session.
 
 Email/password authentication is enabled only when SMTP delivery is completely configured. Set `SMTP_HOST`, `SMTP_FROM`, and, when authentication is required, both `SMTP_USER` and `SMTP_PASS`. Optional settings are `SMTP_PORT` (default `587`), `SMTP_SECURE` (default `false`), and `FRESH_SESSION_MAX_AGE_MINUTES` (default `15`). See [docs/smtp-deployment.md](docs/smtp-deployment.md) for deployment behavior; do not commit secret values.
 
@@ -68,8 +76,8 @@ Apply SQL files in `drizzle/` to the PostgreSQL database before deploying schema
 
 The console uses path-based routes rather than query-string views:
 
-- `/dashboard`, `/redeem-codes`, and `/api-docs` are regular user pages.
-- `/admin/plans`, `/admin/skus`, `/admin/redeem-codes`, `/admin/subscriptions`, `/admin/orders`, `/admin/payments`, `/admin/users`, and `/admin/logs` are provider-independent administrator pages.
+- `/dashboard`, `/services`, `/redeem-codes`, and `/account/api-keys` are regular user pages.
+- `/admin/services`, `/admin/plans`, `/admin/skus`, `/admin/redeem-codes`, `/admin/subscriptions`, `/admin/orders`, `/admin/payments`, `/admin/users`, and `/admin/logs` are provider-independent administrator pages.
 - `/admin/afdian/mappings`, `/admin/afdian/orders`, and `/admin/afdian/events` are the Afdian PSP adapter pages.
 - New resources use `/new`; editable resources use `/{id}`.
 

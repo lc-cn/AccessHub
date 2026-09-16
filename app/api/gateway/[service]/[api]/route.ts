@@ -1,7 +1,7 @@
-import { headers } from 'next/headers'
 import { NextResponse } from 'next/server'
 import { and, eq } from 'drizzle-orm'
 import { auth } from '@/lib/auth'
+import { authenticateApiKey } from '@/lib/api-keys'
 import type { ServiceAuthType, ServiceParameter } from '@/lib/api-services'
 import { prepareUpstreamRequest } from '@/lib/api-gateway-request'
 import { db } from '@/lib/db'
@@ -11,9 +11,9 @@ import { reserveApiUsage } from '@/lib/gateway-allowance'
 type Context = { params: Promise<{ service: string; api: string }> }
 
 async function gateway(request: Request, context: Context) {
-  const session = await auth.api.getSession({ headers: await headers() })
-  if (!session?.user) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
   const { service: serviceCode, api: apiCode } = await context.params
+  const principal = await authenticateGatewayRequest(request, serviceCode)
+  if (!principal) return NextResponse.json({ error: 'unauthorized' }, { status: 401, headers: { 'www-authenticate': 'Bearer' } })
   const [target] = await db.select({
     baseUrl: apiServices.baseUrl, authType: apiServices.authType, authConfigEncrypted: apiServices.authConfigEncrypted,
     apiId: serviceApis.id, path: serviceApis.path, method: serviceApis.method, parameters: serviceApis.parameters,
@@ -24,7 +24,7 @@ async function gateway(request: Request, context: Context) {
 
   const prepared = await prepareUpstreamRequest(request, target.baseUrl, target.path, target.parameters as ServiceParameter[], target.authType as ServiceAuthType, target.authConfigEncrypted)
   if (!prepared.ok) return NextResponse.json({ error: 'invalid_request', detail: prepared.error }, { status: 400 })
-  const reservation = await reserveApiUsage(session.user.id, target.usageUnits, `service_api:${target.apiId}`)
+  const reservation = await reserveApiUsage(principal.userId, target.usageUnits, `service_api:${target.apiId}`)
   if (!reservation.ok) return NextResponse.json(reservation.body, { status: reservation.status })
 
   try {
@@ -41,6 +41,13 @@ async function gateway(request: Request, context: Context) {
     const timeout = error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError')
     return NextResponse.json({ error: timeout ? 'upstream_timeout' : 'upstream_unavailable', usageUnits: target.usageUnits }, { status: timeout ? 504 : 502 })
   }
+}
+
+async function authenticateGatewayRequest(request: Request, serviceCode: string) {
+  const authorization = request.headers.get('authorization')
+  if (authorization?.startsWith('Bearer ')) return authenticateApiKey(authorization.slice(7).trim(), serviceCode)
+  const session = await auth.api.getSession({ headers: request.headers })
+  return session?.user ? { userId: session.user.id, apiKeyId: null } : null
 }
 
 export const GET = gateway

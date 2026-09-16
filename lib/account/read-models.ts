@@ -3,6 +3,8 @@ import { db } from '@/lib/db'
 import { AFDIAN_PROVIDER_ID } from '@/lib/afdian-oauth'
 import {
   account,
+  apiKeys,
+  apiServices,
   apiUsage,
   creditGrants,
   creditTransactions,
@@ -73,6 +75,15 @@ export async function getAccountSecurity(userId: string, currentSessionId: strin
     sessions: sessions.map((item) => ({ ...item, current: item.id === currentSessionId })),
     hasCredential: identities.some((item) => item.provider === 'credential' && item.hasPassword),
   }
+}
+
+export async function getAccountApiKeys(userId: string) {
+  return db.select({ id: apiKeys.id, name: apiKeys.name, prefix: apiKeys.prefix, serviceScopes: apiKeys.serviceScopes, expiresAt: apiKeys.expiresAt, lastUsedAt: apiKeys.lastUsedAt, revokedAt: apiKeys.revokedAt, createdAt: apiKeys.createdAt })
+    .from(apiKeys).where(eq(apiKeys.userId, userId)).orderBy(desc(apiKeys.createdAt)).limit(100)
+}
+
+export async function getApiKeyServiceOptions() {
+  return db.select({ code: apiServices.code, name: apiServices.name }).from(apiServices).where(eq(apiServices.enabled, true)).orderBy(apiServices.name)
 }
 
 export async function getAccountEntitlements(userId: string) {
