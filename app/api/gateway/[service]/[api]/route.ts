@@ -7,6 +7,7 @@ import { prepareUpstreamRequest } from '@/lib/api-gateway-request'
 import { db } from '@/lib/db'
 import { apiServices, serviceApis } from '@/lib/db/schema'
 import { reserveApiUsage } from '@/lib/gateway-allowance'
+import { chargedUsageUnits } from '@/lib/gateway-billing'
 
 type Context = { params: Promise<{ service: string; api: string }> }
 
@@ -24,22 +25,31 @@ async function gateway(request: Request, context: Context) {
 
   const prepared = await prepareUpstreamRequest(request, target.baseUrl, target.path, target.parameters as ServiceParameter[], target.authType as ServiceAuthType, target.authConfigEncrypted)
   if (!prepared.ok) return NextResponse.json({ error: 'invalid_request', detail: prepared.error }, { status: 400 })
-  const reservation = await reserveApiUsage(principal.userId, target.usageUnits, `service_api:${target.apiId}`)
-  if (!reservation.ok) return NextResponse.json(reservation.body, { status: reservation.status })
+  const referenceId = `service_api:${target.apiId}`
+  const preflight = await reserveApiUsage(principal.userId, target.usageUnits, referenceId, { commit: false })
+  if (!preflight.ok) return NextResponse.json(preflight.body, { status: preflight.status })
 
   try {
     const upstream = await fetch(prepared.url, { method: target.method, headers: prepared.headers, body: prepared.body, redirect: 'manual', signal: AbortSignal.timeout(target.timeoutMs) })
+    const unitsToCharge = chargedUsageUnits(upstream.status, target.usageUnits)
+    let reservation = preflight
+    if (unitsToCharge > 0) {
+      const committed = await reserveApiUsage(principal.userId, unitsToCharge, referenceId)
+      if (!committed.ok) return NextResponse.json(committed.body, { status: committed.status })
+      reservation = committed
+    }
     const responseHeaders = new Headers()
     for (const name of ['content-type', 'content-language', 'cache-control', 'etag', 'last-modified']) {
       const value = upstream.headers.get(name)
       if (value) responseHeaders.set(name, value)
     }
-    responseHeaders.set('x-accesshub-usage-units', String(target.usageUnits))
+    responseHeaders.set('x-accesshub-usage-units', String(unitsToCharge))
+    responseHeaders.set('x-accesshub-configured-usage-units', String(target.usageUnits))
     responseHeaders.set('x-accesshub-allowance-source', reservation.allowanceSource)
     return new Response(upstream.body, { status: upstream.status, headers: responseHeaders })
   } catch (error) {
     const timeout = error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError')
-    return NextResponse.json({ error: timeout ? 'upstream_timeout' : 'upstream_unavailable', usageUnits: target.usageUnits }, { status: timeout ? 504 : 502 })
+    return NextResponse.json({ error: timeout ? 'upstream_timeout' : 'upstream_unavailable', usageUnits: 0, configuredUsageUnits: target.usageUnits }, { status: timeout ? 504 : 502 })
   }
 }
 

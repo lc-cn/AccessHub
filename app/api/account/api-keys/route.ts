@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { and, count, eq, gt, isNull, or } from 'drizzle-orm'
-import { createApiKey, parseApiKeyCreateInput } from '@/lib/api-keys'
+import { createApiKey, ensureDefaultApiKey, parseApiKeyCreateInput } from '@/lib/api-keys'
 import { requireSession } from '@/lib/account'
 import { AccountError } from '@/lib/account/errors'
 import { requireFreshSession } from '@/lib/account/fresh-session'
@@ -12,6 +12,7 @@ import { apiKeys, apiServices } from '@/lib/db/schema'
 export async function GET() {
   try {
     const current = await requireSession()
+    await ensureDefaultApiKey(current.user.id)
     const [currentKeys, services] = await Promise.all([
       getAccountApiKeys(current.user.id),
       getApiKeyServiceOptions(),

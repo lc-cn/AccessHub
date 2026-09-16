@@ -78,7 +78,7 @@ export async function getAccountSecurity(userId: string, currentSessionId: strin
 }
 
 export async function getAccountApiKeys(userId: string) {
-  return db.select({ id: apiKeys.id, name: apiKeys.name, prefix: apiKeys.prefix, serviceScopes: apiKeys.serviceScopes, expiresAt: apiKeys.expiresAt, lastUsedAt: apiKeys.lastUsedAt, revokedAt: apiKeys.revokedAt, createdAt: apiKeys.createdAt })
+  return db.select({ id: apiKeys.id, name: apiKeys.name, kind: apiKeys.kind, prefix: apiKeys.prefix, serviceScopes: apiKeys.serviceScopes, expiresAt: apiKeys.expiresAt, lastUsedAt: apiKeys.lastUsedAt, revokedAt: apiKeys.revokedAt, createdAt: apiKeys.createdAt })
     .from(apiKeys).where(eq(apiKeys.userId, userId)).orderBy(desc(apiKeys.createdAt)).limit(100)
 }
 

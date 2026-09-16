@@ -38,7 +38,7 @@ export function parseServiceApiInput(body: Record<string, unknown>) {
   if (!name) return { ok: false, error: '请输入 API 名称' } as const
   if (!path || !path.startsWith('/') || path.startsWith('//') || /^https?:/i.test(path)) return { ok: false, error: 'API 路径必须是以 / 开头的相对路径' } as const
   if (!serviceApiMethods.includes(method)) return { ok: false, error: '请求方式无效' } as const
-  if (!Number.isSafeInteger(usageUnits) || usageUnits < 1 || usageUnits > 10000) return { ok: false, error: '单次计费次数必须是 1–10000 的整数' } as const
+  if (!Number.isSafeInteger(usageUnits) || usageUnits < 0 || usageUnits > 10000) return { ok: false, error: '单次计费次数必须是 0–10000 的整数；0 表示免费调用' } as const
   if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1000 || timeoutMs > 120000) return { ok: false, error: '超时时间必须在 1000–120000 毫秒之间' } as const
   if (!parameters.ok) return parameters
   if (method === 'GET' && parameters.value.some((item) => item.location === 'body')) return { ok: false, error: 'GET API 不能配置 Body 参数' } as const

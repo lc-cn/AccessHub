@@ -9,7 +9,7 @@ export type AllowanceReservation = {
   ok: true
   plan: string
   allowancePlan: string | null
-  allowanceSource: 'current_plan' | 'default_fallback' | 'default_plan' | 'credits'
+  allowanceSource: 'current_plan' | 'default_fallback' | 'default_plan' | 'credits' | 'free'
   creditUsed: boolean
   creditsRemaining: number
   usage: UsageSnapshot | null
@@ -20,7 +20,9 @@ export type AllowanceReservation = {
   body: Record<string, unknown>
 }
 
-export function reserveApiUsage(userId: string, units = 1, referenceId?: string): Promise<AllowanceReservation> {
+export function reserveApiUsage(userId: string, units = 1, referenceId?: string, options: { commit?: boolean } = {}): Promise<AllowanceReservation> {
+  if (!Number.isSafeInteger(units) || units < 0) throw new RangeError('Usage units must be a non-negative integer')
+  const commit = options.commit !== false
   return db.transaction(async (tx) => {
     const now = new Date()
     const minuteStart = new Date(now.getTime() - 60_000)
@@ -40,6 +42,18 @@ export function reserveApiUsage(userId: string, units = 1, referenceId?: string)
     ])
     const currentPlan = entitlement ?? defaultPlan
     if (!currentPlan || !defaultPlan) return { ok: false, status: 403, body: { error: 'access_policy_missing' } }
+    if (units === 0) {
+      return {
+        ok: true,
+        plan: currentPlan.planName,
+        allowancePlan: currentPlan.planName,
+        allowanceSource: 'free',
+        creditUsed: false,
+        creditsRemaining: 0,
+        usage: null,
+        units,
+      }
+    }
 
     const loadUsage = async (planId: string) => {
       const [[totals], [todayUsage]] = await Promise.all([
@@ -73,16 +87,18 @@ export function reserveApiUsage(userId: string, units = 1, referenceId?: string)
       const available = grants.reduce((sum, grant) => sum + grant.remainingCredits, 0)
       if (available < units) return { ok: false, status: 429, body: { error: 'usage_limit_exceeded', period: allowance.exceeded?.period, limit: allowance.exceeded?.limit, used: allowance.exceeded?.used, requiredUnits: units, creditsRemaining: available, retryAfterSeconds: allowance.exceeded ? retryAfterSeconds(allowance.exceeded.period, now, lastWindowStartedAt) : undefined } }
       let remaining = units
-      for (const grant of grants) {
-        if (!remaining) break
-        const deduction = Math.min(remaining, grant.remainingCredits)
-        const balanceAfter = grant.remainingCredits - deduction
-        await tx.update(creditGrants).set({ remainingCredits: balanceAfter }).where(eq(creditGrants.id, grant.id))
-        await tx.insert(creditTransactions).values({ id: randomUUID(), userId, creditGrantId: grant.id, delta: -deduction, balanceAfter, reason: 'api_usage', referenceId })
-        remaining -= deduction
+      if (commit) {
+        for (const grant of grants) {
+          if (!remaining) break
+          const deduction = Math.min(remaining, grant.remainingCredits)
+          const balanceAfter = grant.remainingCredits - deduction
+          await tx.update(creditGrants).set({ remainingCredits: balanceAfter }).where(eq(creditGrants.id, grant.id))
+          await tx.insert(creditTransactions).values({ id: randomUUID(), userId, creditGrantId: grant.id, delta: -deduction, balanceAfter, reason: 'api_usage', referenceId })
+          remaining -= deduction
+        }
       }
       creditUsed = true
-    } else {
+    } else if (commit) {
       const { todayUsage } = selected.snapshot
       if (todayUsage) {
         const inCurrentWindow = todayUsage.windowStartedAt > minuteStart
@@ -93,7 +109,8 @@ export function reserveApiUsage(userId: string, units = 1, referenceId?: string)
     }
 
     const [creditTotal] = await tx.select({ total: sql<number>`coalesce(sum(${creditGrants.remainingCredits}), 0)::int`.mapWith(Number) }).from(creditGrants).where(and(eq(creditGrants.userId, userId), gt(creditGrants.remainingCredits, 0), or(isNull(creditGrants.expiresAt), gt(creditGrants.expiresAt, now))))
-    const usage = selected ? { minute: selected.snapshot.usage.minute + units, daily: selected.snapshot.usage.daily + units, weekly: selected.snapshot.usage.weekly + units, monthly: selected.snapshot.usage.monthly + units } : null
+    const chargedUnits = commit ? units : 0
+    const usage = selected ? { minute: selected.snapshot.usage.minute + chargedUnits, daily: selected.snapshot.usage.daily + chargedUnits, weekly: selected.snapshot.usage.weekly + chargedUnits, monthly: selected.snapshot.usage.monthly + chargedUnits } : null
     return { ok: true, plan: currentPlan.planName, allowancePlan: selected?.plan.planName ?? null, allowanceSource: selected?.source ?? 'credits', creditUsed, creditsRemaining: creditTotal?.total ?? 0, usage, units }
   })
 }

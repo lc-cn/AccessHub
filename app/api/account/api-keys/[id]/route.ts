@@ -13,7 +13,7 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
     requireFreshSession(current.session)
     const { id } = await params
     const now = new Date()
-    const [revoked] = await db.update(apiKeys).set({ revokedAt: now, updatedAt: now }).where(and(eq(apiKeys.id, id), eq(apiKeys.userId, current.user.id), isNull(apiKeys.revokedAt))).returning({ id: apiKeys.id, name: apiKeys.name })
+    const [revoked] = await db.update(apiKeys).set({ revokedAt: now, updatedAt: now }).where(and(eq(apiKeys.id, id), eq(apiKeys.userId, current.user.id), eq(apiKeys.kind, 'custom'), isNull(apiKeys.revokedAt))).returning({ id: apiKeys.id, name: apiKeys.name })
     if (!revoked) throw new AccountError('api_key_not_found', 'API Key 不存在或已经撤销。', 404)
     await recordSecurityEventBestEffort({ actorId: current.user.id, action: 'account.api_key.revoked', resourceId: revoked.id, detail: revoked.name })
     return NextResponse.json({ ok: true, revokedAt: now })

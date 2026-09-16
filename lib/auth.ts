@@ -9,6 +9,7 @@ import { sendVerificationEmail, sendEmailChangeVerification } from '@/lib/email/
 import { sendPasswordResetEmail } from '@/lib/email/password-reset'
 import { getAccountAuthPolicy } from '@/lib/account/auth-policy'
 import { recordSecurityEventBestEffort } from '@/lib/account/security-events'
+import { ensureDefaultApiKey } from '@/lib/api-keys'
 
 const origins = [
   'http://localhost:3000',
@@ -27,6 +28,15 @@ export const auth = betterAuth({
   account: { accountLinking: { enabled: true, disableImplicitLinking: true, allowDifferentEmails: true, trustedProviders: [AFDIAN_PROVIDER_ID] } },
   session: { freshAge: accountAuthPolicy.freshSessionMaxAgeSeconds },
   rateLimit: accountAuthPolicy.rateLimit,
+  databaseHooks: {
+    user: {
+      create: {
+        after: async (createdUser) => {
+          await ensureDefaultApiKey(createdUser.id)
+        },
+      },
+    },
+  },
   emailAndPassword: {
     enabled: emailReady,
     requireEmailVerification: emailReady,

@@ -32,13 +32,13 @@ openssl rand -base64 48 | vercel env add SERVICE_CREDENTIALS_KEY production --se
 
 Administrators define upstream services under `/admin/services`, then publish endpoints at `/api/gateway/<service-code>/<api-code>`. Upstream authentication supports Bearer, custom Header, Query parameter, and Basic Auth. The gateway validates the configured parameter allow-list, reserves the endpoint's configured usage units, injects upstream authentication server-side, and does not follow upstream redirects.
 
-Users create scoped personal API keys under `/api-keys` in My Workspace. The complete key is returned once; only its SHA-256 hash is stored. Programmatic clients call the gateway with:
+Users receive a system-managed default API key and can create additional scoped keys under `/api-keys` in My Workspace. Custom keys are returned once and stored only as SHA-256 hashes. The default key is encrypted at rest so the browser Test Console can retrieve it for authenticated test calls. Programmatic clients call the gateway with:
 
 ```text
 Authorization: Bearer ahk_...
 ```
 
-API keys may be limited to selected services and can be revoked immediately. Browser-based testing under `/services` continues to use the signed-in session.
+API keys may be limited to selected services and can be revoked immediately. Browser-based testing under `/services` retrieves the signed-in user's default key and calls the same Bearer-authenticated gateway used by external clients. Billable units are committed only when the upstream responds with HTTP 200; network failures, timeouts, and non-200 responses do not consume quota.
 
 Email/password authentication is enabled only when SMTP delivery is completely configured. Set `SMTP_HOST`, `SMTP_FROM`, and, when authentication is required, both `SMTP_USER` and `SMTP_PASS`. Optional settings are `SMTP_PORT` (default `587`), `SMTP_SECURE` (default `false`), and `FRESH_SESSION_MAX_AGE_MINUTES` (default `15`). See [docs/smtp-deployment.md](docs/smtp-deployment.md) for deployment behavior; do not commit secret values.
 

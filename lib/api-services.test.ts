@@ -14,6 +14,8 @@ test('validates an endpoint and its request parameters', () => {
   assert.equal(parseServiceApiInput({ code: 'chat', name: 'Chat', path: 'https://evil.example', method: 'GET', usageUnits: 1, parameters: [] }).ok, false)
   assert.equal(parseServiceApiInput({ code: 'user', name: 'User', path: '/users/{id}', method: 'GET', usageUnits: 1, parameters: [] }).ok, false)
   assert.equal(parseServiceApiInput({ code: 'user', name: 'User', path: '/users/{id}', method: 'GET', usageUnits: 1, parameters: [{ name: 'id', location: 'path', dataType: 'string', required: true }] }).ok, true)
+  assert.equal(parseServiceApiInput({ code: 'health', name: 'Health', path: '/health', method: 'GET', usageUnits: 0, parameters: [] }).ok, true)
+  assert.deepEqual(parseServiceApiInput({ code: 'invalid', name: 'Invalid', path: '/invalid', method: 'GET', usageUnits: -1, parameters: [] }), { ok: false, error: '单次计费次数必须是 0–10000 的整数；0 表示免费调用' })
 })
 
 test('encrypts service credentials and materializes auth headers', () => {
