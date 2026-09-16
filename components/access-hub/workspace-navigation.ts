@@ -6,6 +6,7 @@ import {
   HeartHandshake,
   History,
   LayoutDashboard,
+  KeyRound,
   ReceiptText,
   Repeat2,
   Ticket,
@@ -15,7 +16,7 @@ import {
   Waypoints,
 } from 'lucide-react'
 
-export type WorkspaceRoute = 'dashboard' | 'redeem' | 'catalog' | 'catalog-service' | 'catalog-api' | 'codes' | 'codes-new' | 'plans' | 'plans-new' | 'plans-edit' | 'skus' | 'skus-new' | 'skus-edit' | 'services' | 'services-new' | 'services-edit' | 'service-api-new' | 'service-api-edit' | 'subscriptions' | 'orders' | 'order-detail' | 'payments' | 'users' | 'logs' | 'afdian' | 'afdian-new' | 'afdian-edit' | 'afdian-orders' | 'afdian-order-detail' | 'afdian-events'
+export type WorkspaceRoute = 'dashboard' | 'api-keys' | 'redeem' | 'catalog' | 'catalog-service' | 'catalog-api' | 'codes' | 'codes-new' | 'plans' | 'plans-new' | 'plans-edit' | 'skus' | 'skus-new' | 'skus-edit' | 'services' | 'services-new' | 'services-edit' | 'service-api-new' | 'service-api-edit' | 'subscriptions' | 'orders' | 'order-detail' | 'payments' | 'users' | 'logs' | 'afdian' | 'afdian-new' | 'afdian-edit' | 'afdian-orders' | 'afdian-order-detail' | 'afdian-events'
 
 export type WorkspaceNavItem = {
   label: string
@@ -44,6 +45,7 @@ export const workspaceNavGroups: WorkspaceNavGroup[] = [
     items: [
       { label: '概览', description: '权益、用量与升级', href: '/dashboard', active: ['dashboard'], icon: LayoutDashboard },
       { label: '服务中心', description: '浏览并测试可用 API', href: '/services', active: ['catalog', 'catalog-service', 'catalog-api'], icon: Waypoints },
+      { label: 'API Keys', description: '管理程序调用凭据', href: '/api-keys', active: ['api-keys'], icon: KeyRound },
       { label: '兑换权益', description: '核销爱发电兑换码', href: '/redeem-codes', active: ['redeem'], icon: Ticket },
       { label: '个人中心', description: '账户、安全与订单', href: '/account', active: [], icon: UserRound },
     ],
@@ -87,6 +89,7 @@ export const workspaceNavGroups: WorkspaceNavGroup[] = [
 
 export const workspaceRouteMeta: Record<WorkspaceRoute, { eyebrow: string; title: string; description: string; admin?: boolean }> = {
   dashboard: { eyebrow: '我的空间', title: '概览', description: '查看账户、访问权益与今天的 API 使用情况。' },
+  'api-keys': { eyebrow: '我的空间 / 开发者', title: 'API Keys', description: '为服务端、脚本或 CI 创建和管理程序调用凭据。' },
   redeem: { eyebrow: '我的空间 / 权益', title: '兑换权益', description: '核销兑换码，权益将立即加入当前账户。' },
   catalog: { eyebrow: '服务中心', title: '可用服务', description: '浏览当前账户可以通过 AccessHub 网关调用的真实 API 服务。' },
   'catalog-service': { eyebrow: '服务中心 / 服务', title: '服务详情', description: '查看服务能力及其公开 API 端点。' },

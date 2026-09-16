@@ -4,7 +4,7 @@ import { createApiKey, parseApiKeyCreateInput } from '@/lib/api-keys'
 import { requireSession } from '@/lib/account'
 import { AccountError } from '@/lib/account/errors'
 import { requireFreshSession } from '@/lib/account/fresh-session'
-import { getAccountApiKeys } from '@/lib/account/read-models'
+import { getAccountApiKeys, getApiKeyServiceOptions } from '@/lib/account/read-models'
 import { recordSecurityEventBestEffort } from '@/lib/account/security-events'
 import { db } from '@/lib/db'
 import { apiKeys, apiServices } from '@/lib/db/schema'
@@ -12,7 +12,11 @@ import { apiKeys, apiServices } from '@/lib/db/schema'
 export async function GET() {
   try {
     const current = await requireSession()
-    return NextResponse.json({ apiKeys: await getAccountApiKeys(current.user.id) })
+    const [currentKeys, services] = await Promise.all([
+      getAccountApiKeys(current.user.id),
+      getApiKeyServiceOptions(),
+    ])
+    return NextResponse.json({ apiKeys: currentKeys, services })
   } catch (error) {
     if (error instanceof AccountError) return NextResponse.json({ error: error.message, code: error.code }, { status: error.status })
     console.error('[account] Failed to list API keys')

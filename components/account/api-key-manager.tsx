@@ -5,8 +5,8 @@ import { Check, Copy, KeyRound, Plus, ShieldCheck, Trash2, X } from 'lucide-reac
 import { requestJson } from '@/lib/http-client'
 import { EmptyState, Feedback, Panel, Status, dangerButton, formatDate, primaryButton, secondaryButton } from './ui'
 
-type ApiKeyItem = { id: string; name: string; prefix: string; serviceScopes: string[]; expiresAt: Date | string | null; lastUsedAt: Date | string | null; revokedAt: Date | string | null; createdAt: Date | string }
-type ServiceOption = { code: string; name: string }
+export type ApiKeyItem = { id: string; name: string; prefix: string; serviceScopes: string[]; expiresAt: Date | string | null; lastUsedAt: Date | string | null; revokedAt: Date | string | null; createdAt: Date | string }
+export type ServiceOption = { code: string; name: string }
 type CreatedResponse = { apiKey: ApiKeyItem; token: string }
 
 export function ApiKeyManager({ initialKeys, services }: { initialKeys: ApiKeyItem[]; services: ServiceOption[] }) {

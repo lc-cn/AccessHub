@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useState } from 'react'
 import { AfdianMappings } from './afadian-mappings'
+import { ApiKeyManagement } from './api-key-management'
 import { CommerceResources } from './commerce-resources'
 import { Orders } from './orders'
 import { Skus } from './skus'
@@ -51,6 +52,7 @@ function RouteContent({ route, resourceId, dashboard, loading, copied, refresh, 
   const plans = dashboard?.plans ?? []
   const skus: Sku[] = []
   if (route === 'dashboard') return <Overview dashboard={dashboard} loading={loading} copied={copied} onCopyId={() => void copyId()} onNavigate={(view) => router.push(view === '兑换码' ? '/redeem-codes' : '/admin/plans')}/>
+  if (route === 'api-keys') return <ApiKeyManagement/>
   if (route === 'redeem') return <RedeemCodes authenticated isAdmin={false} skus={skus} onChanged={refresh} onSignIn={signIn} mode="redeem"/>
   if (route === 'catalog' || route === 'catalog-service' || route === 'catalog-api') return <ServiceCatalog mode={route === 'catalog' ? 'list' : route === 'catalog-service' ? 'service' : 'api'} resourceId={resourceId}/>
   if (route === 'codes' || route === 'codes-new') return <RedeemCodes authenticated isAdmin skus={skus} onChanged={refresh} onSignIn={signIn} mode={route === 'codes' ? 'list' : 'new'}/>

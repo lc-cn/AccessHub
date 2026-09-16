@@ -32,7 +32,7 @@ openssl rand -base64 48 | vercel env add SERVICE_CREDENTIALS_KEY production --se
 
 Administrators define upstream services under `/admin/services`, then publish endpoints at `/api/gateway/<service-code>/<api-code>`. Upstream authentication supports Bearer, custom Header, Query parameter, and Basic Auth. The gateway validates the configured parameter allow-list, reserves the endpoint's configured usage units, injects upstream authentication server-side, and does not follow upstream redirects.
 
-Users create scoped personal API keys under `/account/api-keys`. The complete key is returned once; only its SHA-256 hash is stored. Programmatic clients call the gateway with:
+Users create scoped personal API keys under `/api-keys` in My Workspace. The complete key is returned once; only its SHA-256 hash is stored. Programmatic clients call the gateway with:
 
 ```text
 Authorization: Bearer ahk_...
@@ -76,7 +76,7 @@ Apply SQL files in `drizzle/` to the PostgreSQL database before deploying schema
 
 The console uses path-based routes rather than query-string views:
 
-- `/dashboard`, `/services`, `/redeem-codes`, and `/account/api-keys` are regular user pages.
+- `/dashboard`, `/services`, `/api-keys`, and `/redeem-codes` are regular user pages.
 - `/admin/services`, `/admin/plans`, `/admin/skus`, `/admin/redeem-codes`, `/admin/subscriptions`, `/admin/orders`, `/admin/payments`, `/admin/users`, and `/admin/logs` are provider-independent administrator pages.
 - `/admin/afdian/mappings`, `/admin/afdian/orders`, and `/admin/afdian/events` are the Afdian PSP adapter pages.
 - New resources use `/new`; editable resources use `/{id}`.
