@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useCallback, useContext, useMemo, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import type { Dispatch, ReactNode, SetStateAction } from 'react'
 import type { DashboardData } from './types'
 
@@ -29,4 +29,18 @@ export function useWorkspaceData() {
   const value = useContext(WorkspaceDataContext)
   if (!value) throw new Error('useWorkspaceData must be used inside WorkspaceDataProvider')
   return value
+}
+
+const WORKSPACE_REFRESH_EVENT = 'accesshub:workspace-refresh'
+
+export function requestWorkspaceRefresh() {
+  window.dispatchEvent(new Event(WORKSPACE_REFRESH_EVENT))
+}
+
+export function useWorkspaceRefresh(refresh: () => void | Promise<void>) {
+  useEffect(() => {
+    const handler = () => { void refresh() }
+    window.addEventListener(WORKSPACE_REFRESH_EVENT, handler)
+    return () => window.removeEventListener(WORKSPACE_REFRESH_EVENT, handler)
+  }, [refresh])
 }

@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ArrowLeft, Check, Copy, Download, KeyRound, Plus, Search, Sparkles, TicketCheck } from 'lucide-react'
 import type { AdminData, RedeemCode, Sku } from './types'
 import { requestJson } from '@/lib/http-client'
+import { useWorkspaceRefresh } from './workspace-data'
 
 type StatusFilter = '全部' | '可使用' | '已核销' | '已过期'
 type Props = { authenticated: boolean; isAdmin: boolean; skus: Sku[]; onChanged: () => Promise<void>; onSignIn: () => Promise<void>; mode: 'redeem' | 'list' | 'new' }
@@ -44,6 +45,7 @@ export function RedeemCodes({ authenticated, isAdmin, skus, onChanged, onSignIn,
   }, [isAdmin, mode])
 
   useEffect(() => { void loadAdmin() }, [loadAdmin])
+  useWorkspaceRefresh(loadAdmin)
 
   const redeem = async () => {
     if (!authenticated) return onSignIn()

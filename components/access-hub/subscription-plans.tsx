@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ArrowLeft, CheckCircle2, Gauge, InfinityIcon, Plus, RotateCcw, Save, Search, Star, Users } from 'lucide-react'
 import type { AdminData, AdminPlan, DashboardPlan } from './types'
 import { requestJson } from '@/lib/http-client'
+import { useWorkspaceRefresh } from './workspace-data'
 
 type PlanForm = { name: string; description: string; rank: string; rateLimit: string; dailyLimit: string; weeklyLimit: string; monthlyLimit: string; isDefault: boolean }
 type Props = { plans: DashboardPlan[]; mode: 'list' | 'new' | 'edit'; planId?: string; onChanged: () => Promise<void> }
@@ -31,6 +32,7 @@ export function SubscriptionPlanManagement({ plans, mode, planId, onChanged }: P
   }, [])
 
   useEffect(() => { void load() }, [load])
+  useWorkspaceRefresh(load)
   const selected = useMemo(() => adminPlans.find((plan) => plan.id === planId) ?? null, [adminPlans, planId])
   useEffect(() => {
     if (mode === 'new') setForm(emptyForm)

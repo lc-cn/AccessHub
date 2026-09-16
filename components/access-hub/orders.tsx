@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ArrowLeft, CheckCircle2, CircleAlert, Clock3, Copy, MailCheck, ReceiptText, Search, TicketCheck } from 'lucide-react'
 import type { AdminData, Order } from './types'
 import { requestJson } from '@/lib/http-client'
+import { useWorkspaceRefresh } from './workspace-data'
 
 export function Orders({ mode, orderId, provider = 'all' }: { mode: 'list' | 'detail'; orderId?: string; provider?: 'all' | 'afdian' }) {
   const [orders, setOrders] = useState<Order[]>([])
@@ -19,6 +20,7 @@ export function Orders({ mode, orderId, provider = 'all' }: { mode: 'list' | 'de
     finally { setLoading(false) }
   }, [provider])
   useEffect(() => { void load() }, [load])
+  useWorkspaceRefresh(load)
   const selected = useMemo(() => orders.find((order) => order.id === orderId) ?? null, [orderId, orders])
   const visible = orders.filter((order) => !query || `${order.externalOrderId} ${order.externalOfferTitle} ${order.externalOfferId} ${order.codes.map((code) => code.code).join(' ')}`.toLowerCase().includes(query.toLowerCase()))
   const copy = async (value: string) => { await navigator.clipboard.writeText(value); setCopied(value); setTimeout(() => setCopied(''), 1400) }
