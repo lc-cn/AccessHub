@@ -4,25 +4,26 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ArrowLeft, Braces, CheckCircle2, ChevronRight, CircleOff, KeyRound, Plus, RotateCcw, Save, Search, ServerCog, ShieldCheck, Trash2, Waypoints } from 'lucide-react'
-import type { AdminData, ApiService, ServiceApi, ServiceParameter, WorkerServiceBinding } from './types'
+import type { AdminData, ApiService, Permission, ServiceApi, ServiceParameter, WorkerServiceBinding } from './types'
 import { useWorkspaceRefresh } from './workspace-data'
 import { requestJson } from '@/lib/http-client'
 
 type Mode = 'list' | 'new' | 'edit' | 'api-new' | 'api-edit'
-type ServiceForm = { code: string; name: string; description: string; transport: ApiService['transport']; bindingName: string; baseUrl: string; authType: ApiService['authType']; authToken: string; authHeader: string; authQuery: string; authValue: string; authUsername: string; authPassword: string; enabled: boolean }
+type ServiceForm = { code: string; name: string; description: string; transport: ApiService['transport']; bindingName: string; baseUrl: string; authType: ApiService['authType']; authToken: string; authHeader: string; authQuery: string; authValue: string; authUsername: string; authPassword: string; requiredPermissionId: string; enabled: boolean }
 type ApiForm = { code: string; name: string; description: string; path: string; method: ServiceApi['method']; usageUnits: string; timeoutMs: string; enabled: boolean; parameters: ServiceParameter[] }
 
-const emptyService: ServiceForm = { code: '', name: '', description: '', transport: 'http', bindingName: '', baseUrl: '', authType: 'none', authToken: '', authHeader: 'x-api-key', authQuery: 'api_key', authValue: '', authUsername: '', authPassword: '', enabled: true }
+const emptyService: ServiceForm = { code: '', name: '', description: '', transport: 'http', bindingName: '', baseUrl: '', authType: 'none', authToken: '', authHeader: 'x-api-key', authQuery: 'api_key', authValue: '', authUsername: '', authPassword: '', requiredPermissionId: '', enabled: true }
 const emptyApi: ApiForm = { code: '', name: '', description: '', path: '/', method: 'POST', usageUnits: '1', timeoutMs: '30000', enabled: true, parameters: [] }
 const emptyParameter: ServiceParameter = { name: '', location: 'body', dataType: 'string', required: false, description: '' }
 
-function serviceFormFor(service: ApiService): ServiceForm { return { ...emptyService, code: service.code, name: service.name, description: service.description, transport: service.transport, bindingName: service.bindingName || '', baseUrl: service.baseUrl, authType: service.authType, enabled: service.enabled } }
+function serviceFormFor(service: ApiService): ServiceForm { return { ...emptyService, code: service.code, name: service.name, description: service.description, transport: service.transport, bindingName: service.bindingName || '', baseUrl: service.baseUrl, authType: service.authType, requiredPermissionId: service.requiredPermissionId || '', enabled: service.enabled } }
 function apiFormFor(api: ServiceApi): ApiForm { return { code: api.code, name: api.name, description: api.description, path: api.path, method: api.method, usageUnits: String(api.usageUnits), timeoutMs: String(api.timeoutMs), enabled: api.enabled, parameters: api.parameters } }
 
 export function Services({ mode, resourceId }: { mode: Mode; resourceId?: string }) {
   const router = useRouter()
   const [services, setServices] = useState<ApiService[]>([])
   const [workerBindings, setWorkerBindings] = useState<WorkerServiceBinding[]>([])
+  const [permissions, setPermissions] = useState<Permission[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [query, setQuery] = useState('')
@@ -35,7 +36,7 @@ export function Services({ mode, resourceId }: { mode: Mode; resourceId?: string
 
   const load = useCallback(async () => {
     setLoading(true)
-    try { const data = await requestJson<AdminData>('/api/admin?section=services', { cache: 'no-store' }); setServices(data.services ?? []); setWorkerBindings(data.workerBindings ?? []); setNotice(null) }
+    try { const data = await requestJson<AdminData>('/api/admin?section=services', { cache: 'no-store' }); setServices(data.services ?? []); setWorkerBindings(data.workerBindings ?? []); setPermissions(data.permissions ?? []); setNotice(null) }
     catch (error) { setNotice({ tone: 'error', text: error instanceof Error ? error.message : '服务目录读取失败' }) }
     finally { setLoading(false) }
   }, [])
@@ -83,7 +84,7 @@ export function Services({ mode, resourceId }: { mode: Mode; resourceId?: string
   if ((mode === 'api-new' || mode === 'api-edit') && !selectedService) return <Missing text="所属服务不存在或已被删除"/>
   if (mode === 'api-edit' && !selectedApi) return <Missing text="API 不存在或已被删除"/>
 
-  if (mode === 'new' || mode === 'edit') return <ServiceEditor mode={mode} service={selectedService} workerBindings={workerBindings} form={serviceForm} setForm={setServiceForm} dirty={serviceDirty} saving={saving} notice={notice} onReset={() => setServiceForm(serviceBaseline)} onSave={saveService}/>
+  if (mode === 'new' || mode === 'edit') return <ServiceEditor mode={mode} service={selectedService} workerBindings={workerBindings} permissions={permissions} form={serviceForm} setForm={setServiceForm} dirty={serviceDirty} saving={saving} notice={notice} onReset={() => setServiceForm(serviceBaseline)} onSave={saveService}/>
   return <ApiEditor mode={mode} service={selectedService!} form={apiForm} setForm={setApiForm} dirty={apiDirty} saving={saving} notice={notice} onReset={() => setApiForm(apiBaseline)} onSave={saveApi}/>
 }
 
@@ -111,7 +112,7 @@ function ServiceCard({ service }: { service: ApiService }) {
     </div>
     <p className="mt-3 truncate font-mono text-[11px] text-slate-400">{service.transport === 'worker_binding' ? `Worker Binding · ${service.bindingName}` : service.baseUrl}</p>
     <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-slate-500">
-      <span>{service.apis.length} 个 API</span>
+      <span>{service.apis.length} 个 API</span><span>{service.requiredPermissionName ? `权限 · ${service.requiredPermissionName}` : '所有登录用户可见'}</span>
       <span className="flex items-center gap-1"><KeyRound size={12}/>{authLabel(service.authType)}{service.authType !== 'none' && (service.authConfigured ? ' · 已配置' : ' · 缺失')}</span>
       <Link href={`/admin/services/${service.id}`} className="ml-auto inline-flex items-center gap-1 font-medium text-[#3157d5] hover:text-[#2448bd] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3157d5]/30">编辑服务<ChevronRight size={13}/></Link>
     </div>
@@ -121,10 +122,11 @@ function ServiceCard({ service }: { service: ApiService }) {
   </article>
 }
 
-function ServiceEditor({ mode, service, workerBindings, form, setForm, dirty, saving, notice, onReset, onSave }: { mode: 'new' | 'edit'; service: ApiService | null; workerBindings: WorkerServiceBinding[]; form: ServiceForm; setForm: (value: ServiceForm) => void; dirty: boolean; saving: boolean; notice: { tone: 'success' | 'error'; text: string } | null; onReset: () => void; onSave: () => Promise<void> }) {
+function ServiceEditor({ mode, service, workerBindings, permissions, form, setForm, dirty, saving, notice, onReset, onSave }: { mode: 'new' | 'edit'; service: ApiService | null; workerBindings: WorkerServiceBinding[]; permissions: Permission[]; form: ServiceForm; setForm: (value: ServiceForm) => void; dirty: boolean; saving: boolean; notice: { tone: 'success' | 'error'; text: string } | null; onReset: () => void; onSave: () => Promise<void> }) {
   const selectedBinding = workerBindings.find((item) => item.binding === form.bindingName)
   const missingCurrentBinding = form.bindingName && !selectedBinding
   return <div className="mx-auto max-w-4xl"><Link href="/admin/services" className="mb-5 inline-flex items-center gap-2 text-sm text-slate-500 hover:text-[#3157d5]"><ArrowLeft size={15}/>返回服务列表</Link><form onSubmit={(event) => { event.preventDefault(); void onSave() }} className="rounded-[24px] bg-white p-6 shadow-[0_18px_55px_rgba(39,55,92,.06)] sm:p-8"><EditorHeading eyebrow={mode === 'new' ? '新服务' : '服务连接'} title={mode === 'new' ? '连接真实 API 服务' : service?.name || ''} dirty={dirty}/><div className="mt-8 grid gap-5 sm:grid-cols-2"><Field label="服务编码" hint="用于用户调用路径，保存后仍可修改"><input className="access-input font-mono lowercase" value={form.code} onChange={(event) => setForm({ ...form, code: event.target.value.toLowerCase() })} placeholder="example-ai"/></Field><Field label="服务名称"><input className="access-input" value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} placeholder="示例 AI 服务"/></Field><div className="sm:col-span-2"><Field label="连接方式" hint="同一 Cloudflare 账户内优先使用 Worker Binding，调用不经过公网 DNS"><select className="access-input" value={form.transport} onChange={(event) => { const transport = event.target.value as ApiService['transport']; setForm({ ...form, transport, bindingName: transport === 'worker_binding' ? form.bindingName || workerBindings[0]?.binding || '' : form.bindingName, baseUrl: form.transport === 'worker_binding' && transport === 'http' ? '' : form.baseUrl }) }}><option value="http">公网 HTTP</option><option value="worker_binding" disabled={workerBindings.length === 0}>Cloudflare Worker Binding</option></select></Field></div>{form.transport === 'http' ? <div className="sm:col-span-2"><Field label="Base URL" hint="生产环境仅允许 HTTPS，且不能指向本机或私有网络"><input className="access-input font-mono" value={form.baseUrl} onChange={(event) => setForm({ ...form, baseUrl: event.target.value })} placeholder="https://api.example.com/v1"/></Field></div> : <div className="sm:col-span-2"><Field label="Cloudflare Worker 服务" hint="列表来自 AccessHub 当前部署中已声明的 Service Bindings"><select className="access-input font-mono" value={form.bindingName} onChange={(event) => setForm({ ...form, bindingName: event.target.value })}><option value="" disabled>请选择 Worker 服务</option>{missingCurrentBinding && <option value={form.bindingName}>{form.bindingName}（当前部署不可用）</option>}{workerBindings.map((item) => <option key={item.binding} value={item.binding}>{item.label} · {item.service} ({item.binding})</option>)}</select></Field><div className="mt-2 rounded-xl bg-[#f4f7ff] px-4 py-3 text-xs leading-5 text-slate-500">{selectedBinding ? <>请求将通过 Cloudflare 内部绑定 <strong className="font-mono text-[#3157d5]">{selectedBinding.binding}</strong> 直达 <strong className="font-mono text-[#3157d5]">{selectedBinding.service}</strong>，不经过公网 DNS。</> : '请选择当前部署中可用的 Worker 服务。'} API 的相对路径仍在下方端点中维护。</div></div>}<div className="sm:col-span-2"><Field label="说明"><textarea rows={3} className="access-input resize-none" value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} placeholder="说明此服务的能力和适用场景"/></Field></div></div>
+      <section className="mt-7 rounded-2xl border border-slate-200 p-5"><div className="flex items-center gap-3"><span className="grid size-9 place-items-center rounded-xl bg-[#edf2ff] text-[#3157d5]"><KeyRound size={16}/></span><div><h3 className="text-sm font-medium">访问权限</h3><p className="mt-0.5 text-xs text-slate-400">服务目录展示和网关调用使用同一权限校验。</p></div></div><div className="mt-5"><Field label="可见性"><select className="access-input" value={form.requiredPermissionId} onChange={(event) => setForm({ ...form, requiredPermissionId: event.target.value })}><option value="">所有已登录用户</option>{permissions.map((permission) => <option key={permission.id} value={permission.id}>需要权限 · {permission.name} ({permission.code})</option>)}</select></Field>{permissions.length === 0 && <p className="mt-2 text-[10px] text-amber-600">还没有权限定义。可先在“权限”页面创建并分配给订阅计划。</p>}</div></section>
       <ServiceAuthEditor service={service} form={form} setForm={setForm}/>
       <Toggle checked={form.enabled} onChange={(enabled) => setForm({ ...form, enabled })} title="启用服务" detail="停用后，此服务下的全部 API 将立即停止接受用户请求。"/>{notice && <div className="mt-5"><Notice value={notice}/></div>}<EditorActions dirty={dirty} saving={saving} onReset={onReset} label={mode === 'new' ? '创建服务' : '保存服务'}/>
     </form>{mode === 'edit' && service && <ApiCatalog service={service}/>}</div>

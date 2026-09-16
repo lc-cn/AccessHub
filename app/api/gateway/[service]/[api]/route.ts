@@ -9,6 +9,7 @@ import { db } from '@/lib/db'
 import { apiServices, serviceApis } from '@/lib/db/schema'
 import { reserveApiUsage } from '@/lib/gateway-allowance'
 import { chargedUsageUnits } from '@/lib/gateway-billing'
+import { hasPermission, resolveUserPermissions } from '@/lib/permissions'
 
 type Context = { params: Promise<{ service: string; api: string }> }
 
@@ -19,10 +20,13 @@ async function gateway(request: Request, context: Context) {
   const [target] = await db.select({
     transport: apiServices.transport, bindingName: apiServices.bindingName,
     baseUrl: apiServices.baseUrl, authType: apiServices.authType, authConfigEncrypted: apiServices.authConfigEncrypted,
+    requiredPermissionId: apiServices.requiredPermissionId,
     apiId: serviceApis.id, path: serviceApis.path, method: serviceApis.method, parameters: serviceApis.parameters,
     usageUnits: serviceApis.usageUnits, timeoutMs: serviceApis.timeoutMs,
   }).from(apiServices).innerJoin(serviceApis, eq(serviceApis.serviceId, apiServices.id)).where(and(eq(apiServices.code, serviceCode), eq(serviceApis.code, apiCode), eq(apiServices.enabled, true), eq(serviceApis.enabled, true))).limit(1)
   if (!target) return NextResponse.json({ error: 'api_not_found' }, { status: 404 })
+  const permissionSet = await resolveUserPermissions(db, principal.userId)
+  if (!hasPermission(permissionSet, target.requiredPermissionId)) return NextResponse.json({ error: 'permission_denied' }, { status: 403 })
   if (request.method !== target.method) return NextResponse.json({ error: 'method_not_allowed', expected: target.method }, { status: 405, headers: { allow: target.method } })
 
   const prepared = await prepareUpstreamRequest(request, target.baseUrl, target.path, target.parameters as ServiceParameter[], target.authType as ServiceAuthType, target.authConfigEncrypted)

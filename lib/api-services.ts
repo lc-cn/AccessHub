@@ -27,11 +27,12 @@ export function parseServiceInput(body: Record<string, unknown>) {
     ? { ok: true, value: `https://${code || 'service'}.internal` } as const
     : normalizeServiceBaseUrl(String(body.baseUrl || ''))
   const authType = serviceAuthTypes.includes(body.authType as ServiceAuthType) ? body.authType as ServiceAuthType : 'none'
+  const requiredPermissionId = String(body.requiredPermissionId || '').trim() || null
   if (!/^[a-z0-9][a-z0-9_-]{1,63}$/.test(code)) return { ok: false, error: '服务编码需为 2–64 位小写字母、数字、横线或下划线' } as const
   if (!name) return { ok: false, error: '请输入服务名称' } as const
   if (transport === 'worker_binding' && (!bindingName || !/^[A-Z_][A-Z0-9_]{0,63}$/.test(bindingName))) return { ok: false, error: 'Worker Binding 名称需为 1–64 位大写字母、数字或下划线，且不能以数字开头' } as const
   if (!baseUrl.ok) return baseUrl
-  return { ok: true, value: { code, name, description, transport, bindingName, baseUrl: baseUrl.value, authType, enabled: body.enabled !== false } } as const
+  return { ok: true, value: { code, name, description, transport, bindingName, baseUrl: baseUrl.value, authType, requiredPermissionId, enabled: body.enabled !== false } } as const
 }
 
 export function parseServiceApiInput(body: Record<string, unknown>) {

@@ -6,12 +6,13 @@ import { auth } from '@/lib/auth'
 import { recordActivity } from '@/lib/activity-log'
 import { parseBenefitInput, parseSubscriptionPlanPolicyInput } from '@/lib/admin-entitlements'
 import { db, withRequestDatabase } from '@/lib/db'
-import { activityLogs, apiServices, orders, payments, providerEvents, providerOfferMappings, redeemCodes, serviceApis, skus, subscriptionPlans, subscriptions, user } from '@/lib/db/schema'
+import { activityLogs, apiServices, orders, payments, permissions as permissionDefinitions, planPermissionGrants, providerEvents, providerOfferMappings, redeemCodes, serviceApis, skus, subscriptionPlans, subscriptions, user } from '@/lib/db/schema'
 import { legacyDurationDays, parsePositiveInteger } from '@/lib/entitlements'
 import { parseServiceApiInput, parseServiceAuthInput, parseServiceInput, sealServiceAuth } from '@/lib/api-services'
 import { subscriptionStatuses, type SubscriptionStatus } from '@/lib/subscription-state'
 import { transitionSubscription } from '@/lib/subscription-service'
 import { hasWorkerServiceBinding, workerServiceBindings } from '@/lib/worker-service-bindings'
+import { parsePermissionInput } from '@/lib/permissions'
 
 async function requireAdmin() {
   const session = await auth.api.getSession({ headers: await headers() })
@@ -77,12 +78,15 @@ export async function GET(request: Request) {
       wants('payments') ? db.select({ id: payments.id, orderId: payments.orderId, providerId: payments.providerId, externalPaymentId: payments.externalPaymentId, status: payments.status, amount: payments.amount, currency: payments.currency, paidAt: payments.paidAt, createdAt: payments.createdAt }).from(payments).orderBy(desc(payments.createdAt)).limit(500) : Promise.resolve([]),
       wants('logs', 'afdian-events') ? db.select({ id: providerEvents.id, providerId: providerEvents.providerId, externalEventId: providerEvents.externalEventId, type: providerEvents.type, status: providerEvents.status, error: providerEvents.error, processedAt: providerEvents.processedAt, createdAt: providerEvents.createdAt }).from(providerEvents).where(section === 'afdian-events' ? eq(providerEvents.providerId, 'psp-afdian') : undefined).orderBy(desc(providerEvents.createdAt)).limit(500) : Promise.resolve([]),
     ])
-    const [serviceRows, serviceApiRows] = await Promise.all([
-      wants('services') ? db.select({ id: apiServices.id, code: apiServices.code, name: apiServices.name, description: apiServices.description, transport: apiServices.transport, bindingName: apiServices.bindingName, baseUrl: apiServices.baseUrl, authType: apiServices.authType, authConfigured: sql<boolean>`${apiServices.authConfigEncrypted} is not null`, enabled: apiServices.enabled, createdAt: apiServices.createdAt, updatedAt: apiServices.updatedAt }).from(apiServices).orderBy(desc(apiServices.updatedAt)) : Promise.resolve([]),
+    const [serviceRows, serviceApiRows, permissionRows, permissionGrantRows] = await Promise.all([
+      wants('services', 'permissions') ? db.select({ id: apiServices.id, code: apiServices.code, name: apiServices.name, description: apiServices.description, transport: apiServices.transport, bindingName: apiServices.bindingName, baseUrl: apiServices.baseUrl, authType: apiServices.authType, authConfigured: sql<boolean>`${apiServices.authConfigEncrypted} is not null`, requiredPermissionId: apiServices.requiredPermissionId, requiredPermissionCode: permissionDefinitions.code, requiredPermissionName: permissionDefinitions.name, enabled: apiServices.enabled, createdAt: apiServices.createdAt, updatedAt: apiServices.updatedAt }).from(apiServices).leftJoin(permissionDefinitions, eq(permissionDefinitions.id, apiServices.requiredPermissionId)).orderBy(desc(apiServices.updatedAt)) : Promise.resolve([]),
       wants('services') ? db.select().from(serviceApis).orderBy(asc(serviceApis.serviceId), asc(serviceApis.createdAt)) : Promise.resolve([]),
+      wants('services', 'permissions') ? db.select().from(permissionDefinitions).orderBy(asc(permissionDefinitions.name), asc(permissionDefinitions.code)) : Promise.resolve([]),
+      wants('services', 'permissions') ? db.select({ permissionId: planPermissionGrants.permissionId, planId: planPermissionGrants.planId }).from(planPermissionGrants) : Promise.resolve([]),
     ])
+    const permissionCatalog = permissionRows.map((permission) => ({ ...permission, planIds: permissionGrantRows.filter((grant) => grant.permissionId === permission.id).map((grant) => grant.planId), serviceCount: serviceRows.filter((service) => service.requiredPermissionId === permission.id).length }))
     const fulfilledOrders = orderRows.filter((order) => section !== 'afdian-orders' || order.providerId === 'psp-afdian').map((order) => ({ ...order, codes: orderCodes.filter((code) => code.orderId === order.id) }))
-    return NextResponse.json({ plans, codes, afdianMappings: mappings, orders: fulfilledOrders, skus: skuRows, users, logs, subscriptions: subscriptionRows, payments: paymentRows, providerEvents: eventRows, services: serviceRows.map((service) => ({ ...service, apis: serviceApiRows.filter((api) => api.serviceId === service.id) })), workerBindings: wants('services') ? workerServiceBindings : [], afadianWebhookConfigured: Boolean(process.env.AFDIAN_WEBHOOK_SECRET), afadianMessengerConfigured: Boolean(process.env.AFDIAN_USER_ID && process.env.AFDIAN_ADMIN_TOKEN) })
+    return NextResponse.json({ plans, codes, afdianMappings: mappings, orders: fulfilledOrders, skus: skuRows, users, logs, subscriptions: subscriptionRows, payments: paymentRows, providerEvents: eventRows, services: serviceRows.map((service) => ({ ...service, apis: serviceApiRows.filter((api) => api.serviceId === service.id) })), permissions: permissionCatalog, workerBindings: wants('services') ? workerServiceBindings : [], afadianWebhookConfigured: Boolean(process.env.AFDIAN_WEBHOOK_SECRET), afadianMessengerConfigured: Boolean(process.env.AFDIAN_USER_ID && process.env.AFDIAN_ADMIN_TOKEN) })
   })
 }
 
@@ -90,6 +94,24 @@ export async function POST(request: Request) {
   const actorId = await requireAdmin()
   if (!actorId) return NextResponse.json({ error: '无权操作' }, { status: 403 })
   const body = await request.json().catch(() => ({}))
+  if (body.type === 'permission') {
+    const parsed = parsePermissionInput(body)
+    if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 })
+    const [sameCode] = await db.select({ id: permissionDefinitions.id }).from(permissionDefinitions).where(eq(permissionDefinitions.code, parsed.value.code)).limit(1)
+    if (sameCode) return NextResponse.json({ error: '权限编码已存在' }, { status: 409 })
+    if (parsed.value.planIds.length) {
+      const assignedPlans = await db.select({ id: subscriptionPlans.id }).from(subscriptionPlans).where(inArray(subscriptionPlans.id, parsed.value.planIds))
+      if (assignedPlans.length !== parsed.value.planIds.length) return NextResponse.json({ error: '包含不存在的订阅计划' }, { status: 400 })
+    }
+    const permissionId = randomUUID()
+    const created = await db.transaction(async (tx) => {
+      const [permission] = await tx.insert(permissionDefinitions).values({ id: permissionId, code: parsed.value.code, name: parsed.value.name, description: parsed.value.description }).returning()
+      if (parsed.value.planIds.length) await tx.insert(planPermissionGrants).values(parsed.value.planIds.map((planId) => ({ id: randomUUID(), planId, permissionId })))
+      return permission
+    })
+    await recordActivity({ actorId, action: 'permission.created', resourceType: 'permission', resourceId: created.id, detail: created.code })
+    return NextResponse.json({ permission: { ...created, planIds: parsed.value.planIds, serviceCount: 0 } })
+  }
   if (body.type === 'plan') {
     const parsed = parseSubscriptionPlanPolicyInput(body, 60)
     if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 })
@@ -151,6 +173,10 @@ export async function POST(request: Request) {
     const parsed = parseServiceInput(body)
     if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 })
     if (parsed.value.transport === 'worker_binding' && !hasWorkerServiceBinding(parsed.value.bindingName)) return NextResponse.json({ error: '请选择当前部署中已配置的 Worker 服务' }, { status: 400 })
+    if (parsed.value.requiredPermissionId) {
+      const [permission] = await db.select({ id: permissionDefinitions.id }).from(permissionDefinitions).where(eq(permissionDefinitions.id, parsed.value.requiredPermissionId)).limit(1)
+      if (!permission) return NextResponse.json({ error: '所选权限不存在' }, { status: 400 })
+    }
     const auth = parseServiceAuthInput(parsed.value.authType, body)
     if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: 400 })
     const [sameCode] = await db.select({ id: apiServices.id }).from(apiServices).where(eq(apiServices.code, parsed.value.code)).limit(1)
@@ -181,6 +207,27 @@ export async function PATCH(request: Request) {
   const actorId = await requireAdmin()
   if (!actorId) return NextResponse.json({ error: '无权操作' }, { status: 403 })
   const body = await request.json().catch(() => ({}))
+  if (body.type === 'permission') {
+    const permissionId = String(body.permissionId || '')
+    const parsed = parsePermissionInput(body)
+    if (!permissionId || !parsed.ok) return NextResponse.json({ error: parsed.ok ? '权限不能为空' : parsed.error }, { status: 400 })
+    const [existing] = await db.select({ id: permissionDefinitions.id }).from(permissionDefinitions).where(eq(permissionDefinitions.id, permissionId)).limit(1)
+    if (!existing) return NextResponse.json({ error: '权限不存在' }, { status: 404 })
+    const [sameCode] = await db.select({ id: permissionDefinitions.id }).from(permissionDefinitions).where(and(eq(permissionDefinitions.code, parsed.value.code), not(eq(permissionDefinitions.id, permissionId)))).limit(1)
+    if (sameCode) return NextResponse.json({ error: '权限编码已存在' }, { status: 409 })
+    if (parsed.value.planIds.length) {
+      const assignedPlans = await db.select({ id: subscriptionPlans.id }).from(subscriptionPlans).where(inArray(subscriptionPlans.id, parsed.value.planIds))
+      if (assignedPlans.length !== parsed.value.planIds.length) return NextResponse.json({ error: '包含不存在的订阅计划' }, { status: 400 })
+    }
+    const updated = await db.transaction(async (tx) => {
+      const [permission] = await tx.update(permissionDefinitions).set({ code: parsed.value.code, name: parsed.value.name, description: parsed.value.description, updatedAt: new Date() }).where(eq(permissionDefinitions.id, permissionId)).returning()
+      await tx.delete(planPermissionGrants).where(eq(planPermissionGrants.permissionId, permissionId))
+      if (parsed.value.planIds.length) await tx.insert(planPermissionGrants).values(parsed.value.planIds.map((planId) => ({ id: randomUUID(), planId, permissionId })))
+      return permission
+    })
+    await recordActivity({ actorId, action: 'permission.updated', resourceType: 'permission', resourceId: updated.id, detail: updated.code })
+    return NextResponse.json({ permission: { ...updated, planIds: parsed.value.planIds } })
+  }
   if (body.type === 'subscription') {
     const subscriptionId = String(body.subscriptionId || '')
     const nextStatus = String(body.status || '') as SubscriptionStatus
@@ -213,6 +260,10 @@ export async function PATCH(request: Request) {
     const parsed = parseServiceInput(body)
     if (!serviceId || !parsed.ok) return NextResponse.json({ error: parsed.ok ? '服务不能为空' : parsed.error }, { status: 400 })
     if (parsed.value.transport === 'worker_binding' && !hasWorkerServiceBinding(parsed.value.bindingName)) return NextResponse.json({ error: '请选择当前部署中已配置的 Worker 服务' }, { status: 400 })
+    if (parsed.value.requiredPermissionId) {
+      const [permission] = await db.select({ id: permissionDefinitions.id }).from(permissionDefinitions).where(eq(permissionDefinitions.id, parsed.value.requiredPermissionId)).limit(1)
+      if (!permission) return NextResponse.json({ error: '所选权限不存在' }, { status: 400 })
+    }
     const [existing] = await db.select().from(apiServices).where(eq(apiServices.id, serviceId)).limit(1)
     if (!existing) return NextResponse.json({ error: '服务不存在' }, { status: 404 })
     const [sameCode] = await db.select({ id: apiServices.id }).from(apiServices).where(and(eq(apiServices.code, parsed.value.code), not(eq(apiServices.id, serviceId)))).limit(1)

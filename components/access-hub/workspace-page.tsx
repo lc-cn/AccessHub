@@ -6,6 +6,7 @@ import { AfdianMappings } from './afadian-mappings'
 import { ApiKeyManagement } from './api-key-management'
 import { CommerceResources } from './commerce-resources'
 import { Orders } from './orders'
+import { Permissions } from './permissions'
 import { Skus } from './skus'
 import { Services } from './services'
 import { ServiceCatalog } from './service-catalog'
@@ -59,6 +60,7 @@ function RouteContent({ route, resourceId, dashboard, loading, copied, refresh, 
   if (route === 'plans' || route === 'plans-new' || route === 'plans-edit') return <SubscriptionPlanManagement plans={plans} onChanged={refresh} mode={route === 'plans' ? 'list' : route === 'plans-new' ? 'new' : 'edit'} planId={resourceId}/>
   if (route === 'skus' || route === 'skus-new' || route === 'skus-edit') return <Skus plans={plans} mode={route === 'skus' ? 'list' : route === 'skus-new' ? 'new' : 'edit'} skuId={resourceId}/>
   if (route === 'services' || route === 'services-new' || route === 'services-edit' || route === 'service-api-new' || route === 'service-api-edit') return <Services mode={route === 'services' ? 'list' : route === 'services-new' ? 'new' : route === 'services-edit' ? 'edit' : route === 'service-api-new' ? 'api-new' : 'api-edit'} resourceId={resourceId}/>
+  if (route === 'permissions' || route === 'permissions-new' || route === 'permissions-edit') return <Permissions mode={route === 'permissions' ? 'list' : route === 'permissions-new' ? 'new' : 'edit'} permissionId={resourceId}/>
   if (route === 'subscriptions' || route === 'payments' || route === 'users' || route === 'logs' || route === 'afdian-events') return <CommerceResources resource={route}/>
   if (route === 'orders' || route === 'order-detail') return <Orders mode={route === 'orders' ? 'list' : 'detail'} orderId={resourceId}/>
   if (route === 'afdian' || route === 'afdian-new' || route === 'afdian-edit') return <AfdianMappings skus={skus} mode={route === 'afdian' ? 'list' : route === 'afdian-new' ? 'new' : 'edit'} mappingId={resourceId}/>

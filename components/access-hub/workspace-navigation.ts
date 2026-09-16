@@ -9,6 +9,7 @@ import {
   KeyRound,
   ReceiptText,
   Repeat2,
+  ShieldCheck,
   Ticket,
   UserRound,
   Users,
@@ -16,7 +17,7 @@ import {
   Waypoints,
 } from 'lucide-react'
 
-export type WorkspaceRoute = 'dashboard' | 'api-keys' | 'redeem' | 'catalog' | 'catalog-service' | 'catalog-api' | 'codes' | 'codes-new' | 'plans' | 'plans-new' | 'plans-edit' | 'skus' | 'skus-new' | 'skus-edit' | 'services' | 'services-new' | 'services-edit' | 'service-api-new' | 'service-api-edit' | 'subscriptions' | 'orders' | 'order-detail' | 'payments' | 'users' | 'logs' | 'afdian' | 'afdian-new' | 'afdian-edit' | 'afdian-orders' | 'afdian-order-detail' | 'afdian-events'
+export type WorkspaceRoute = 'dashboard' | 'api-keys' | 'redeem' | 'catalog' | 'catalog-service' | 'catalog-api' | 'codes' | 'codes-new' | 'plans' | 'plans-new' | 'plans-edit' | 'skus' | 'skus-new' | 'skus-edit' | 'services' | 'services-new' | 'services-edit' | 'service-api-new' | 'service-api-edit' | 'permissions' | 'permissions-new' | 'permissions-edit' | 'subscriptions' | 'orders' | 'order-detail' | 'payments' | 'users' | 'logs' | 'afdian' | 'afdian-new' | 'afdian-edit' | 'afdian-orders' | 'afdian-order-detail' | 'afdian-events'
 
 export type WorkspaceNavItem = {
   label: string
@@ -38,6 +39,7 @@ export const workspaceNavGroups: WorkspaceNavGroup[] = [
     admin: true,
     items: [
       { label: '服务', description: '上游服务与 API', href: '/admin/services', active: ['services', 'services-new', 'services-edit', 'service-api-new', 'service-api-edit'], icon: Waypoints },
+      { label: '权限', description: '能力与计划授权', href: '/admin/permissions', active: ['permissions', 'permissions-new', 'permissions-edit'], icon: ShieldCheck },
     ],
   },
   {
@@ -107,6 +109,9 @@ export const workspaceRouteMeta: Record<WorkspaceRoute, { eyebrow: string; title
   'services-edit': { eyebrow: 'API 网关 / 服务', title: '服务详情', description: '维护服务连接、鉴权方式及其 API 目录。', admin: true },
   'service-api-new': { eyebrow: 'API 网关 / 服务 / API', title: '新增 API', description: '定义请求方式、参数、超时与单次计费次数。', admin: true },
   'service-api-edit': { eyebrow: 'API 网关 / 服务 / API', title: '编辑 API', description: '调整端点路由、参数契约和计费规则。', admin: true },
+  permissions: { eyebrow: 'API 网关 / 授权', title: '权限', description: '定义稳定能力，并由订阅计划向用户授予。', admin: true },
+  'permissions-new': { eyebrow: 'API 网关 / 权限', title: '新增权限', description: '定义一项可被订阅计划授予的服务能力。', admin: true },
+  'permissions-edit': { eyebrow: 'API 网关 / 权限', title: '编辑权限', description: '维护权限定义及其订阅计划授权关系。', admin: true },
   subscriptions: { eyebrow: '商业中心 / 生命周期', title: '订阅', description: '查看独立于支付服务商的订阅状态机。', admin: true },
   orders: { eyebrow: '商业中心 / 交易', title: '订单', description: '查看各支付服务商产生的统一订单。', admin: true },
   'order-detail': { eyebrow: '商业中心 / 订单', title: '订单详情', description: '查看支付、SKU、交付和核销闭环。', admin: true },

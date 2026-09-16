@@ -44,7 +44,7 @@ Only set optional Afdian, OAuth, or SMTP values for features that are enabled. N
 
 ## 3. Apply the database migration
 
-Apply SQL files through `drizzle/0013_worker_service_bindings.sql` to the existing PostgreSQL database before using the new administration form. Existing services are retained as `http` transports.
+Apply SQL files through `drizzle/0014_permissions.sql` to the existing PostgreSQL database before using the administration forms. Existing services are retained as `http` transports, and existing services remain open to all authenticated users until a required permission is selected.
 
 The first preview can use `DATABASE_URL` directly. For production, create a Hyperdrive configuration for the same database in the Cloudflare dashboard, uncomment the `HYPERDRIVE` block in `wrangler.jsonc`, and insert its configuration ID. AccessHub automatically prefers `HYPERDRIVE.connectionString` when the binding exists and falls back to `DATABASE_URL` otherwise.
 
