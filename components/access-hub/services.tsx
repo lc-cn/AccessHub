@@ -87,11 +87,37 @@ export function Services({ mode, resourceId }: { mode: Mode; resourceId?: string
 }
 
 function ServiceList({ services, total, query, setQuery, loading, notice }: { services: ApiService[]; total: number; query: string; setQuery: (value: string) => void; loading: boolean; notice: { tone: 'success' | 'error'; text: string } | null }) {
-  return <section><div className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"><div><p className="text-xs font-medium text-[#3157d5]">API 网关</p><h2 className="mt-1 text-2xl font-semibold">上游服务</h2><p className="mt-2 text-sm text-slate-500">服务管理连接与鉴权，API 端点管理请求契约和计费。</p></div><Link href="/admin/services/new" className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-[#3157d5] px-4 text-sm font-medium text-white"><Plus size={15}/>新增服务</Link></div>
+  return <section>
+    <div className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+      <div><p className="text-xs font-medium text-[#3157d5]">API 网关</p><h2 className="mt-1 text-2xl font-semibold">上游服务</h2><p className="mt-2 text-sm text-slate-500">从服务卡片直接定义 API，服务详情只负责连接与鉴权。</p></div>
+      <Link href="/admin/services/new" className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-[#3157d5] px-4 text-sm font-medium text-white transition hover:bg-[#284bc0] active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3157d5]/30"><Plus size={15}/>新增服务</Link>
+    </div>
     <div className="mb-4 grid grid-cols-3 gap-3"><Metric icon={<ServerCog size={15}/>} label="服务" value={total}/><Metric icon={<Waypoints size={15}/>} label="API" value={services.reduce((sum, item) => sum + item.apis.length, 0)}/><Metric icon={<CheckCircle2 size={15}/>} label="启用" value={services.filter((item) => item.enabled).length}/></div>
-    <label className="mb-4 flex h-11 items-center gap-2 rounded-xl bg-white px-3 text-slate-400 focus-within:ring-2 focus-within:ring-blue-100"><Search size={15}/><input value={query} onChange={(event) => setQuery(event.target.value)} className="w-full bg-transparent text-sm outline-none" placeholder="搜索服务名称、编码或 Base URL"/>{query && <button onClick={() => setQuery('')} className="text-xs">清除</button>}</label>
-    {notice && <Notice value={notice}/>} {loading ? <div className="h-40 animate-pulse rounded-[20px] bg-white"/> : services.length === 0 ? <div className="rounded-[20px] bg-white p-12 text-center"><ServerCog className="mx-auto text-slate-300"/><p className="mt-4 text-sm text-slate-400">{query ? '没有匹配的服务' : '还没有上游服务'}</p>{!query && <Link href="/admin/services/new" className="mt-3 inline-flex text-xs font-medium text-[#3157d5]">连接第一个服务</Link>}</div> : <div className="grid gap-3 lg:grid-cols-2">{services.map((service) => <Link key={service.id} href={`/admin/services/${service.id}`} className="rounded-[18px] bg-white p-5 transition hover:-translate-y-0.5 hover:shadow-[0_14px_34px_rgba(39,55,92,.07)]"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><div className="flex items-center gap-2"><h3 className="truncate font-semibold">{service.name}</h3><Status enabled={service.enabled}/></div><code className="mt-1.5 block truncate text-[11px] text-[#3157d5]">{service.code}</code></div><ChevronRight size={16} className="text-slate-300"/></div><p className="mt-3 truncate text-xs text-slate-400">{service.baseUrl}</p><div className="mt-4 flex items-center gap-4 text-xs text-slate-500"><span>{service.apis.length} 个 API</span><span className="flex items-center gap-1"><KeyRound size={12}/>{authLabel(service.authType)}{service.authType !== 'none' && (service.authConfigured ? ' · 已配置' : ' · 缺失')}</span></div></Link>)}</div>}
+    <label className="mb-4 flex h-11 items-center gap-2 rounded-xl bg-white px-3 text-slate-400 focus-within:ring-2 focus-within:ring-blue-100"><Search size={15}/><input value={query} onChange={(event) => setQuery(event.target.value)} className="w-full bg-transparent text-sm outline-none" placeholder="搜索服务名称、编码或 Base URL"/>{query && <button type="button" onClick={() => setQuery('')} className="text-xs hover:text-slate-600">清除</button>}</label>
+    {notice && <Notice value={notice}/>} {loading ? <div className="h-40 animate-pulse rounded-[20px] bg-white"/> : services.length === 0 ? <div className="rounded-[20px] bg-white p-12 text-center"><ServerCog className="mx-auto text-slate-300"/><p className="mt-4 text-sm text-slate-400">{query ? '没有匹配的服务' : '还没有上游服务'}</p>{!query && <Link href="/admin/services/new" className="mt-3 inline-flex text-xs font-medium text-[#3157d5]">连接第一个服务</Link>}</div> : <div className="grid gap-4 xl:grid-cols-2">{services.map((service) => <ServiceCard key={service.id} service={service}/>)}</div>}
   </section>
+}
+
+function ServiceCard({ service }: { service: ApiService }) {
+  const previewApis = service.apis.slice(0, 3)
+  return <article className="group rounded-[20px] bg-white p-5 shadow-[0_1px_0_rgba(39,55,92,.04)] transition duration-200 hover:-translate-y-0.5 hover:shadow-[0_16px_38px_rgba(39,55,92,.08)]">
+    <div className="flex items-start justify-between gap-4">
+      <div className="min-w-0">
+        <div className="flex items-center gap-2"><h3 className="truncate font-semibold">{service.name}</h3><Status enabled={service.enabled}/></div>
+        <code className="mt-1.5 block truncate text-[11px] text-[#3157d5]">{service.code}</code>
+      </div>
+      <Link href={`/admin/services/${service.id}/apis/new`} aria-label={`为 ${service.name} 新增 API`} className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-xl bg-[#182238] px-3 text-xs font-medium text-white transition hover:bg-[#24314c] active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#182238]/30"><Plus size={14}/>新增 API</Link>
+    </div>
+    <p className="mt-3 truncate font-mono text-[11px] text-slate-400">{service.baseUrl}</p>
+    <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-slate-500">
+      <span>{service.apis.length} 个 API</span>
+      <span className="flex items-center gap-1"><KeyRound size={12}/>{authLabel(service.authType)}{service.authType !== 'none' && (service.authConfigured ? ' · 已配置' : ' · 缺失')}</span>
+      <Link href={`/admin/services/${service.id}`} className="ml-auto inline-flex items-center gap-1 font-medium text-[#3157d5] hover:text-[#2448bd] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3157d5]/30">编辑服务<ChevronRight size={13}/></Link>
+    </div>
+    <div className="mt-4 border-t border-slate-100 pt-3">
+      {previewApis.length === 0 ? <Link href={`/admin/services/${service.id}/apis/new`} className="flex min-h-12 items-center justify-between rounded-xl bg-[#f7f8fb] px-3 text-xs text-slate-400 transition hover:bg-[#f1f4fa] hover:text-[#3157d5]"><span>还没有 API，直接定义第一个端点</span><Plus size={14}/></Link> : <div className="space-y-1">{previewApis.map((api) => <Link key={api.id} href={`/admin/services/${service.id}/apis/${api.id}`} className="grid min-h-10 grid-cols-[3.5rem_minmax(0,1fr)_auto] items-center gap-2 rounded-lg px-2 text-xs transition hover:bg-[#f5f7fb] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#3157d5]/20"><span className="font-mono text-[10px] font-semibold text-[#3157d5]">{api.method}</span><span className="truncate text-slate-600">{api.name}</span><span className="font-mono text-[10px] text-slate-400">{api.usageUnits} 次</span></Link>)}{service.apis.length > previewApis.length && <Link href={`/admin/services/${service.id}`} className="inline-flex px-2 pt-2 text-[11px] font-medium text-slate-400 hover:text-[#3157d5]">查看另外 {service.apis.length - previewApis.length} 个 API</Link>}</div>}
+    </div>
+  </article>
 }
 
 function ServiceEditor({ mode, service, form, setForm, dirty, saving, notice, onReset, onSave }: { mode: 'new' | 'edit'; service: ApiService | null; form: ServiceForm; setForm: (value: ServiceForm) => void; dirty: boolean; saving: boolean; notice: { tone: 'success' | 'error'; text: string } | null; onReset: () => void; onSave: () => Promise<void> }) {

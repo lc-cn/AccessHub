@@ -3,7 +3,6 @@
 import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useState } from 'react'
 import { AfdianMappings } from './afadian-mappings'
-import { ApiDocs } from './api-docs'
 import { CommerceResources } from './commerce-resources'
 import { Orders } from './orders'
 import { Skus } from './skus'
@@ -62,5 +61,5 @@ function RouteContent({ route, resourceId, dashboard, loading, copied, refresh, 
   if (route === 'orders' || route === 'order-detail') return <Orders mode={route === 'orders' ? 'list' : 'detail'} orderId={resourceId}/>
   if (route === 'afdian' || route === 'afdian-new' || route === 'afdian-edit') return <AfdianMappings skus={skus} mode={route === 'afdian' ? 'list' : route === 'afdian-new' ? 'new' : 'edit'} mappingId={resourceId}/>
   if (route === 'afdian-orders' || route === 'afdian-order-detail') return <Orders provider="afdian" mode={route === 'afdian-orders' ? 'list' : 'detail'} orderId={resourceId}/>
-  return <ApiDocs/>
+  return null
 }

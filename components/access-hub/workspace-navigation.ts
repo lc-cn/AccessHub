@@ -1,7 +1,6 @@
 import type { LucideIcon } from 'lucide-react'
 import {
   Activity,
-  BookOpen,
   Boxes,
   CreditCard,
   HeartHandshake,
@@ -16,7 +15,7 @@ import {
   Waypoints,
 } from 'lucide-react'
 
-export type WorkspaceRoute = 'dashboard' | 'redeem' | 'catalog' | 'catalog-service' | 'catalog-api' | 'codes' | 'codes-new' | 'plans' | 'plans-new' | 'plans-edit' | 'skus' | 'skus-new' | 'skus-edit' | 'services' | 'services-new' | 'services-edit' | 'service-api-new' | 'service-api-edit' | 'subscriptions' | 'orders' | 'order-detail' | 'payments' | 'users' | 'logs' | 'afdian' | 'afdian-new' | 'afdian-edit' | 'afdian-orders' | 'afdian-order-detail' | 'afdian-events' | 'docs'
+export type WorkspaceRoute = 'dashboard' | 'redeem' | 'catalog' | 'catalog-service' | 'catalog-api' | 'codes' | 'codes-new' | 'plans' | 'plans-new' | 'plans-edit' | 'skus' | 'skus-new' | 'skus-edit' | 'services' | 'services-new' | 'services-edit' | 'service-api-new' | 'service-api-edit' | 'subscriptions' | 'orders' | 'order-detail' | 'payments' | 'users' | 'logs' | 'afdian' | 'afdian-new' | 'afdian-edit' | 'afdian-orders' | 'afdian-order-detail' | 'afdian-events'
 
 export type WorkspaceNavItem = {
   label: string
@@ -47,7 +46,6 @@ export const workspaceNavGroups: WorkspaceNavGroup[] = [
       { label: '服务中心', description: '浏览并测试可用 API', href: '/services', active: ['catalog', 'catalog-service', 'catalog-api'], icon: Waypoints },
       { label: '兑换权益', description: '核销爱发电兑换码', href: '/redeem-codes', active: ['redeem'], icon: Ticket },
       { label: '个人中心', description: '账户、安全与订单', href: '/account', active: [], icon: UserRound },
-      { label: 'API 文档', description: '接口与调用示例', href: '/api-docs', active: ['docs'], icon: BookOpen },
     ],
   },
   {
@@ -118,7 +116,6 @@ export const workspaceRouteMeta: Record<WorkspaceRoute, { eyebrow: string; title
   'afdian-orders': { eyebrow: '爱发电 / 履约', title: '渠道订单', description: '追踪订单、兑换码、私信送达和核销状态。', admin: true },
   'afdian-order-detail': { eyebrow: '爱发电 / 渠道订单', title: '订单详情', description: '查看爱发电订单对应的权益履约闭环。', admin: true },
   'afdian-events': { eyebrow: '爱发电 / 接入', title: 'Webhook 事件', description: '追踪事件接收、匹配和幂等处理结果。', admin: true },
-  docs: { eyebrow: '开发者', title: 'API 文档', description: '查看当前可用接口、鉴权方式及接入示例。' },
 }
 
 export function visibleWorkspaceGroups(isAdmin: boolean) {
