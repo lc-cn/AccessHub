@@ -5,12 +5,12 @@ import { and, asc, desc, eq, inArray, not, sql } from 'drizzle-orm'
 import { auth } from '@/lib/auth'
 import { recordActivity } from '@/lib/activity-log'
 import { parseBenefitInput, parseSubscriptionPlanPolicyInput } from '@/lib/admin-entitlements'
-import { db } from '@/lib/db'
+import { db, withRequestDatabase } from '@/lib/db'
 import { activityLogs, apiServices, orders, payments, providerEvents, providerOfferMappings, redeemCodes, serviceApis, skus, subscriptionPlans, subscriptions, user } from '@/lib/db/schema'
 import { legacyDurationDays, parsePositiveInteger } from '@/lib/entitlements'
 import { parseServiceApiInput, parseServiceAuthInput, parseServiceInput, sealServiceAuth } from '@/lib/api-services'
 import { subscriptionStatuses, type SubscriptionStatus } from '@/lib/subscription-state'
-import { expireDueSubscriptions, transitionSubscription } from '@/lib/subscription-service'
+import { transitionSubscription } from '@/lib/subscription-service'
 
 async function requireAdmin() {
   const session = await auth.api.getSession({ headers: await headers() })
@@ -27,61 +27,62 @@ async function requireAdmin() {
 
 export async function GET(request: Request) {
   if (!(await requireAdmin())) return NextResponse.json({ error: '无权访问' }, { status: 403 })
-  await expireDueSubscriptions()
-  const section = new URL(request.url).searchParams.get('section') || 'all'
-  const wants = (...names: string[]) => section === 'all' || names.includes(section)
-  const [plans, codes, mappings, orderRows, skuRows, users, logs] = await Promise.all([
-    db.select().from(subscriptionPlans).orderBy(asc(subscriptionPlans.rank), asc(subscriptionPlans.createdAt)),
-    wants('codes') ? db.select({
-      id: redeemCodes.id, code: redeemCodes.code, kind: redeemCodes.kind,
+  return withRequestDatabase(async (db) => {
+    const section = new URL(request.url).searchParams.get('section') || 'all'
+    const wants = (...names: string[]) => section === 'all' || names.includes(section)
+    const [plans, codes, mappings, orderRows, skuRows, users, logs] = await Promise.all([
+      db.select().from(subscriptionPlans).orderBy(asc(subscriptionPlans.rank), asc(subscriptionPlans.createdAt)),
+      wants('codes') ? db.select({
+        id: redeemCodes.id, code: redeemCodes.code, kind: redeemCodes.kind,
+        planId: redeemCodes.planId, planName: subscriptionPlans.name, credits: redeemCodes.credits,
+        durationDays: redeemCodes.durationDays, durationValue: redeemCodes.durationValue,
+        durationUnit: redeemCodes.durationUnit, expiresAt: redeemCodes.expiresAt,
+        redeemedAt: redeemCodes.redeemedAt, createdAt: redeemCodes.createdAt,
+      }).from(redeemCodes).leftJoin(subscriptionPlans, eq(subscriptionPlans.id, redeemCodes.planId)).orderBy(desc(redeemCodes.createdAt)).limit(200) : Promise.resolve([]),
+      wants('afdian') ? db.select({
+        id: providerOfferMappings.id, externalOfferType: providerOfferMappings.externalOfferType, externalOfferId: providerOfferMappings.externalOfferId, name: providerOfferMappings.externalName,
+        skuId: providerOfferMappings.skuId, skuCode: skus.code, skuName: skus.name,
+        kind: skus.kind, planId: skus.planId, planName: subscriptionPlans.name, credits: skus.credits,
+        durationValue: skus.durationValue, durationUnit: skus.durationUnit,
+        codesPerItem: providerOfferMappings.unitsPerItem, enabled: providerOfferMappings.enabled,
+        updatedAt: providerOfferMappings.updatedAt,
+      }).from(providerOfferMappings).innerJoin(skus, eq(skus.id, providerOfferMappings.skuId)).leftJoin(subscriptionPlans, eq(subscriptionPlans.id, skus.planId)).where(eq(providerOfferMappings.providerId, 'psp-afdian')).orderBy(desc(providerOfferMappings.updatedAt)) : Promise.resolve([]),
+      wants('orders', 'afdian-orders') ? db.select({
+        id: orders.id, providerId: orders.providerId, externalOrderId: orders.externalOrderId,
+        externalCustomerId: orders.externalCustomerId, externalOfferId: orders.externalOfferId,
+        externalOfferTitle: orders.externalOfferTitle, userId: orders.userId, skuId: orders.skuId,
+        skuCode: skus.code, skuName: skus.name, status: orders.status, termMonths: orders.termMonths, amount: orders.amount, currency: orders.currency,
+        deliveryStatus: orders.deliveryStatus, deliveryAttempts: orders.deliveryAttempts,
+        deliveryAttemptedAt: orders.deliveryAttemptedAt, deliveredAt: orders.deliveredAt,
+        deliveryLastError: orders.deliveryLastError, createdAt: orders.createdAt,
+      }).from(orders).leftJoin(skus, eq(skus.id, orders.skuId)).orderBy(desc(orders.createdAt)).limit(200) : Promise.resolve([]),
+      wants('skus', 'afdian', 'codes') ? db.select({
+        id: skus.id, code: skus.code, name: skus.name, description: skus.description, kind: skus.kind,
+        planId: skus.planId, planName: subscriptionPlans.name, credits: skus.credits,
+        durationValue: skus.durationValue, durationUnit: skus.durationUnit, active: skus.active,
+        createdAt: skus.createdAt, updatedAt: skus.updatedAt,
+      }).from(skus).leftJoin(subscriptionPlans, eq(subscriptionPlans.id, skus.planId)).orderBy(desc(skus.updatedAt)) : Promise.resolve([]),
+      wants('users') ? db.select({ id: user.id, name: user.name, email: user.email, image: user.image, role: user.role, createdAt: user.createdAt }).from(user).orderBy(desc(user.createdAt)).limit(500) : Promise.resolve([]),
+      wants('logs') ? db.select().from(activityLogs).orderBy(desc(activityLogs.createdAt)).limit(500) : Promise.resolve([]),
+    ])
+    const orderCodes = orderRows.length ? await db.select({
+      id: redeemCodes.id, code: redeemCodes.code, orderId: redeemCodes.orderId, kind: redeemCodes.kind,
       planId: redeemCodes.planId, planName: subscriptionPlans.name, credits: redeemCodes.credits,
-      durationDays: redeemCodes.durationDays, durationValue: redeemCodes.durationValue,
-      durationUnit: redeemCodes.durationUnit, expiresAt: redeemCodes.expiresAt,
-      redeemedAt: redeemCodes.redeemedAt, createdAt: redeemCodes.createdAt,
-    }).from(redeemCodes).leftJoin(subscriptionPlans, eq(subscriptionPlans.id, redeemCodes.planId)).orderBy(desc(redeemCodes.createdAt)).limit(200) : Promise.resolve([]),
-    wants('afdian') ? db.select({
-      id: providerOfferMappings.id, externalOfferType: providerOfferMappings.externalOfferType, externalOfferId: providerOfferMappings.externalOfferId, name: providerOfferMappings.externalName,
-      skuId: providerOfferMappings.skuId, skuCode: skus.code, skuName: skus.name,
-      kind: skus.kind, planId: skus.planId, planName: subscriptionPlans.name, credits: skus.credits,
-      durationValue: skus.durationValue, durationUnit: skus.durationUnit,
-      codesPerItem: providerOfferMappings.unitsPerItem, enabled: providerOfferMappings.enabled,
-      updatedAt: providerOfferMappings.updatedAt,
-    }).from(providerOfferMappings).innerJoin(skus, eq(skus.id, providerOfferMappings.skuId)).leftJoin(subscriptionPlans, eq(subscriptionPlans.id, skus.planId)).where(eq(providerOfferMappings.providerId, 'psp-afdian')).orderBy(desc(providerOfferMappings.updatedAt)) : Promise.resolve([]),
-    wants('orders', 'afdian-orders') ? db.select({
-      id: orders.id, providerId: orders.providerId, externalOrderId: orders.externalOrderId,
-      externalCustomerId: orders.externalCustomerId, externalOfferId: orders.externalOfferId,
-      externalOfferTitle: orders.externalOfferTitle, userId: orders.userId, skuId: orders.skuId,
-      skuCode: skus.code, skuName: skus.name, status: orders.status, termMonths: orders.termMonths, amount: orders.amount, currency: orders.currency,
-      deliveryStatus: orders.deliveryStatus, deliveryAttempts: orders.deliveryAttempts,
-      deliveryAttemptedAt: orders.deliveryAttemptedAt, deliveredAt: orders.deliveredAt,
-      deliveryLastError: orders.deliveryLastError, createdAt: orders.createdAt,
-    }).from(orders).leftJoin(skus, eq(skus.id, orders.skuId)).orderBy(desc(orders.createdAt)).limit(200) : Promise.resolve([]),
-    wants('skus', 'afdian', 'codes') ? db.select({
-      id: skus.id, code: skus.code, name: skus.name, description: skus.description, kind: skus.kind,
-      planId: skus.planId, planName: subscriptionPlans.name, credits: skus.credits,
-      durationValue: skus.durationValue, durationUnit: skus.durationUnit, active: skus.active,
-      createdAt: skus.createdAt, updatedAt: skus.updatedAt,
-    }).from(skus).leftJoin(subscriptionPlans, eq(subscriptionPlans.id, skus.planId)).orderBy(desc(skus.updatedAt)) : Promise.resolve([]),
-    wants('users') ? db.select({ id: user.id, name: user.name, email: user.email, image: user.image, role: user.role, createdAt: user.createdAt }).from(user).orderBy(desc(user.createdAt)).limit(500) : Promise.resolve([]),
-    wants('logs') ? db.select().from(activityLogs).orderBy(desc(activityLogs.createdAt)).limit(500) : Promise.resolve([]),
-  ])
-  const orderCodes = orderRows.length ? await db.select({
-    id: redeemCodes.id, code: redeemCodes.code, orderId: redeemCodes.orderId, kind: redeemCodes.kind,
-    planId: redeemCodes.planId, planName: subscriptionPlans.name, credits: redeemCodes.credits,
-    durationValue: redeemCodes.durationValue, durationUnit: redeemCodes.durationUnit,
-    redeemedAt: redeemCodes.redeemedAt, redeemedBy: redeemCodes.redeemedBy,
-  }).from(redeemCodes).leftJoin(subscriptionPlans, eq(subscriptionPlans.id, redeemCodes.planId)).where(inArray(redeemCodes.orderId, orderRows.map((order) => order.id))) : []
-  const [subscriptionRows, paymentRows, eventRows] = await Promise.all([
-    wants('subscriptions') ? db.select({ id: subscriptions.id, userId: subscriptions.userId, userName: user.name, planId: subscriptions.planId, planName: subscriptionPlans.name, skuId: subscriptions.skuId, skuCode: skus.code, providerId: subscriptions.providerId, status: subscriptions.status, currentPeriodStart: subscriptions.currentPeriodStart, currentPeriodEnd: subscriptions.currentPeriodEnd, cancelAtPeriodEnd: subscriptions.cancelAtPeriodEnd, createdAt: subscriptions.createdAt, updatedAt: subscriptions.updatedAt }).from(subscriptions).innerJoin(subscriptionPlans, eq(subscriptionPlans.id, subscriptions.planId)).leftJoin(skus, eq(skus.id, subscriptions.skuId)).leftJoin(user, eq(user.id, subscriptions.userId)).orderBy(desc(subscriptions.updatedAt)).limit(500) : Promise.resolve([]),
-    wants('payments') ? db.select({ id: payments.id, orderId: payments.orderId, providerId: payments.providerId, externalPaymentId: payments.externalPaymentId, status: payments.status, amount: payments.amount, currency: payments.currency, paidAt: payments.paidAt, createdAt: payments.createdAt }).from(payments).orderBy(desc(payments.createdAt)).limit(500) : Promise.resolve([]),
-    wants('logs', 'afdian-events') ? db.select({ id: providerEvents.id, providerId: providerEvents.providerId, externalEventId: providerEvents.externalEventId, type: providerEvents.type, status: providerEvents.status, error: providerEvents.error, processedAt: providerEvents.processedAt, createdAt: providerEvents.createdAt }).from(providerEvents).where(section === 'afdian-events' ? eq(providerEvents.providerId, 'psp-afdian') : undefined).orderBy(desc(providerEvents.createdAt)).limit(500) : Promise.resolve([]),
-  ])
-  const [serviceRows, serviceApiRows] = await Promise.all([
-    wants('services') ? db.select({ id: apiServices.id, code: apiServices.code, name: apiServices.name, description: apiServices.description, transport: apiServices.transport, bindingName: apiServices.bindingName, baseUrl: apiServices.baseUrl, authType: apiServices.authType, authConfigured: sql<boolean>`${apiServices.authConfigEncrypted} is not null`, enabled: apiServices.enabled, createdAt: apiServices.createdAt, updatedAt: apiServices.updatedAt }).from(apiServices).orderBy(desc(apiServices.updatedAt)) : Promise.resolve([]),
-    wants('services') ? db.select().from(serviceApis).orderBy(asc(serviceApis.serviceId), asc(serviceApis.createdAt)) : Promise.resolve([]),
-  ])
-  const fulfilledOrders = orderRows.filter((order) => section !== 'afdian-orders' || order.providerId === 'psp-afdian').map((order) => ({ ...order, codes: orderCodes.filter((code) => code.orderId === order.id) }))
-  return NextResponse.json({ plans, codes, afdianMappings: mappings, orders: fulfilledOrders, skus: skuRows, users, logs, subscriptions: subscriptionRows, payments: paymentRows, providerEvents: eventRows, services: serviceRows.map((service) => ({ ...service, apis: serviceApiRows.filter((api) => api.serviceId === service.id) })), afadianWebhookConfigured: Boolean(process.env.AFDIAN_WEBHOOK_SECRET), afadianMessengerConfigured: Boolean(process.env.AFDIAN_USER_ID && process.env.AFDIAN_ADMIN_TOKEN) })
+      durationValue: redeemCodes.durationValue, durationUnit: redeemCodes.durationUnit,
+      redeemedAt: redeemCodes.redeemedAt, redeemedBy: redeemCodes.redeemedBy,
+    }).from(redeemCodes).leftJoin(subscriptionPlans, eq(subscriptionPlans.id, redeemCodes.planId)).where(inArray(redeemCodes.orderId, orderRows.map((order) => order.id))) : []
+    const [subscriptionRows, paymentRows, eventRows] = await Promise.all([
+      wants('subscriptions') ? db.select({ id: subscriptions.id, userId: subscriptions.userId, userName: user.name, planId: subscriptions.planId, planName: subscriptionPlans.name, skuId: subscriptions.skuId, skuCode: skus.code, providerId: subscriptions.providerId, status: subscriptions.status, currentPeriodStart: subscriptions.currentPeriodStart, currentPeriodEnd: subscriptions.currentPeriodEnd, cancelAtPeriodEnd: subscriptions.cancelAtPeriodEnd, createdAt: subscriptions.createdAt, updatedAt: subscriptions.updatedAt }).from(subscriptions).innerJoin(subscriptionPlans, eq(subscriptionPlans.id, subscriptions.planId)).leftJoin(skus, eq(skus.id, subscriptions.skuId)).leftJoin(user, eq(user.id, subscriptions.userId)).orderBy(desc(subscriptions.updatedAt)).limit(500) : Promise.resolve([]),
+      wants('payments') ? db.select({ id: payments.id, orderId: payments.orderId, providerId: payments.providerId, externalPaymentId: payments.externalPaymentId, status: payments.status, amount: payments.amount, currency: payments.currency, paidAt: payments.paidAt, createdAt: payments.createdAt }).from(payments).orderBy(desc(payments.createdAt)).limit(500) : Promise.resolve([]),
+      wants('logs', 'afdian-events') ? db.select({ id: providerEvents.id, providerId: providerEvents.providerId, externalEventId: providerEvents.externalEventId, type: providerEvents.type, status: providerEvents.status, error: providerEvents.error, processedAt: providerEvents.processedAt, createdAt: providerEvents.createdAt }).from(providerEvents).where(section === 'afdian-events' ? eq(providerEvents.providerId, 'psp-afdian') : undefined).orderBy(desc(providerEvents.createdAt)).limit(500) : Promise.resolve([]),
+    ])
+    const [serviceRows, serviceApiRows] = await Promise.all([
+      wants('services') ? db.select({ id: apiServices.id, code: apiServices.code, name: apiServices.name, description: apiServices.description, transport: apiServices.transport, bindingName: apiServices.bindingName, baseUrl: apiServices.baseUrl, authType: apiServices.authType, authConfigured: sql<boolean>`${apiServices.authConfigEncrypted} is not null`, enabled: apiServices.enabled, createdAt: apiServices.createdAt, updatedAt: apiServices.updatedAt }).from(apiServices).orderBy(desc(apiServices.updatedAt)) : Promise.resolve([]),
+      wants('services') ? db.select().from(serviceApis).orderBy(asc(serviceApis.serviceId), asc(serviceApis.createdAt)) : Promise.resolve([]),
+    ])
+    const fulfilledOrders = orderRows.filter((order) => section !== 'afdian-orders' || order.providerId === 'psp-afdian').map((order) => ({ ...order, codes: orderCodes.filter((code) => code.orderId === order.id) }))
+    return NextResponse.json({ plans, codes, afdianMappings: mappings, orders: fulfilledOrders, skus: skuRows, users, logs, subscriptions: subscriptionRows, payments: paymentRows, providerEvents: eventRows, services: serviceRows.map((service) => ({ ...service, apis: serviceApiRows.filter((api) => api.serviceId === service.id) })), afadianWebhookConfigured: Boolean(process.env.AFDIAN_WEBHOOK_SECRET), afadianMessengerConfigured: Boolean(process.env.AFDIAN_USER_ID && process.env.AFDIAN_ADMIN_TOKEN) })
+  })
 }
 
 export async function POST(request: Request) {
