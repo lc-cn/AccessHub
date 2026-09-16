@@ -13,3 +13,9 @@ deploy.sh
 node_modules
 .next/
 .DS_Store
+/dist/
+.vinext/
+.wrangler/
+.vercel
+.env*
+.dev.vars*

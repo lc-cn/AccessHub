@@ -1,0 +1,52 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "accesshub",
+  "compatibility_date": "2026-09-16",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "main": "vinext/server/fetch-handler",
+  "assets": {
+    "directory": "dist/client",
+    "not_found_handling": "none",
+    "binding": "ASSETS"
+  },
+  "observability": {
+    "enabled": true
+  },
+  // Keep values out of source control. Upload them with Wrangler as encrypted
+  // Worker secrets; this list is also validated before development/deployment.
+  "secrets": {
+    "required": [
+      "AFDIAN_ADMIN_TOKEN",
+      "AFDIAN_USER_ID",
+      "AFDIAN_WEBHOOK_SECRET",
+      "BETTER_AUTH_SECRET",
+      "BETTER_AUTH_URL",
+      "DATABASE_URL",
+      "FRESH_SESSION_MAX_AGE_MINUTES",
+      "GITHUB_CLIENT_ID",
+      "GITHUB_CLIENT_SECRET",
+      "NEXT_PUBLIC_AFDIAN_URL",
+      "SERVICE_CREDENTIALS_KEY",
+      "SMTP_FROM",
+      "SMTP_HOST",
+      "SMTP_PASS",
+      "SMTP_PORT",
+      "SMTP_SECURE",
+      "SMTP_USER"
+    ]
+  },
+  // Each private upstream selected in the admin UI must be declared here.
+  // The `binding` value is stored by AccessHub; `service` is the target Worker's deployed name.
+  // "services": [
+  //   { "binding": "EXAMPLE_API", "service": "example-api" }
+  // ],
+  // After creating Hyperdrive, uncomment this binding and replace the id.
+  "hyperdrive": [
+    {
+      "binding": "HYPERDRIVE",
+      "id": "487a5b5e88ad40a4b004cb9bda19808d"
+    }
+  ]
+}

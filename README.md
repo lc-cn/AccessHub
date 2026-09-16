@@ -32,6 +32,8 @@ openssl rand -base64 48 | vercel env add SERVICE_CREDENTIALS_KEY production --se
 
 Administrators define upstream services under `/admin/services`, then publish endpoints at `/api/gateway/<service-code>/<api-code>`. Upstream authentication supports Bearer, custom Header, Query parameter, and Basic Auth. The gateway validates the configured parameter allow-list, reserves the endpoint's configured usage units, injects upstream authentication server-side, and does not follow upstream redirects.
 
+Services can use either a public HTTP origin or a private Cloudflare Worker Service Binding. Worker Binding services avoid public DNS and network transit, while preserving the same API contract, authentication injection, allowance checks, and success-only billing behavior. See [docs/cloudflare-deployment.md](docs/cloudflare-deployment.md) for deployment, Hyperdrive, binding, and cutover instructions.
+
 Users receive a system-managed default API key and can create additional scoped keys under `/api-keys` in My Workspace. Custom keys are returned once and stored only as SHA-256 hashes. The default key is encrypted at rest so the browser Test Console can retrieve it for authenticated test calls. Programmatic clients call the gateway with:
 
 ```text

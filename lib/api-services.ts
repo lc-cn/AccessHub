@@ -2,11 +2,13 @@ import { createCipheriv, createDecipheriv, randomBytes, createHash } from 'node:
 import { isIP } from 'node:net'
 
 export const serviceAuthTypes = ['none', 'bearer', 'header', 'query', 'basic'] as const
+export const serviceTransportTypes = ['http', 'worker_binding'] as const
 export const serviceApiMethods = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'] as const
 export const parameterLocations = ['query', 'header', 'path', 'body'] as const
 export const parameterDataTypes = ['string', 'number', 'boolean', 'json'] as const
 
 export type ServiceAuthType = typeof serviceAuthTypes[number]
+export type ServiceTransport = typeof serviceTransportTypes[number]
 export type ServiceApiMethod = typeof serviceApiMethods[number]
 export type ServiceParameter = { name: string; location: typeof parameterLocations[number]; dataType: typeof parameterDataTypes[number]; required: boolean; description: string }
 export type ServiceAuthConfig = { token?: string; header?: string; query?: string; value?: string; username?: string; password?: string }
@@ -17,12 +19,19 @@ export function parseServiceInput(body: Record<string, unknown>) {
   const code = String(body.code || '').trim().toLowerCase()
   const name = String(body.name || '').trim()
   const description = String(body.description || '').trim()
-  const baseUrl = normalizeServiceBaseUrl(String(body.baseUrl || ''))
+  const requestedTransport = body.transport == null ? 'http' : String(body.transport)
+  if (!serviceTransportTypes.includes(requestedTransport as ServiceTransport)) return { ok: false, error: '服务连接方式无效' } as const
+  const transport = requestedTransport as ServiceTransport
+  const bindingName = transport === 'worker_binding' ? String(body.bindingName || '').trim().toUpperCase() : null
+  const baseUrl = transport === 'worker_binding'
+    ? { ok: true, value: `https://${code || 'service'}.internal` } as const
+    : normalizeServiceBaseUrl(String(body.baseUrl || ''))
   const authType = serviceAuthTypes.includes(body.authType as ServiceAuthType) ? body.authType as ServiceAuthType : 'none'
   if (!/^[a-z0-9][a-z0-9_-]{1,63}$/.test(code)) return { ok: false, error: '服务编码需为 2–64 位小写字母、数字、横线或下划线' } as const
   if (!name) return { ok: false, error: '请输入服务名称' } as const
+  if (transport === 'worker_binding' && (!bindingName || !/^[A-Z_][A-Z0-9_]{0,63}$/.test(bindingName))) return { ok: false, error: 'Worker Binding 名称需为 1–64 位大写字母、数字或下划线，且不能以数字开头' } as const
   if (!baseUrl.ok) return baseUrl
-  return { ok: true, value: { code, name, description, baseUrl: baseUrl.value, authType, enabled: body.enabled !== false } } as const
+  return { ok: true, value: { code, name, description, transport, bindingName, baseUrl: baseUrl.value, authType, enabled: body.enabled !== false } } as const
 }
 
 export function parseServiceApiInput(body: Record<string, unknown>) {

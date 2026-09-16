@@ -2,12 +2,23 @@
   "name": "my-project",
   "version": "0.1.0",
   "private": true,
-  "packageManager": "pnpm@12.3.4",
+  "packageManager": "pnpm@10.17.1",
+  "imports": {
+    "#accesshub-platform-bindings": {
+      "workerd": "./lib/platform-bindings.cloudflare.ts",
+      "worker": "./lib/platform-bindings.cloudflare.ts",
+      "default": "./lib/platform-bindings.ts"
+    }
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "test": "node --experimental-strip-types --test lib/*.test.ts lib/**/*.test.ts"
+    "test": "node --experimental-strip-types --test lib/*.test.ts lib/**/*.test.ts",
+    "dev:vinext": "vinext dev --port 3001",
+    "build:vinext": "vinext build",
+    "start:vinext": "wrangler dev --config dist/server/wrangler.json",
+    "deploy:vinext": "vinext-cloudflare deploy --config dist/server/wrangler.json"
   },
   "dependencies": {
     "@base-ui/react": "^1.5.0",
@@ -21,20 +32,30 @@
     "next": "16.3.3",
     "nodemailer": "10.0.9",
     "pg": "^8.23.0",
-    "react": "^19",
-    "react-dom": "^19",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
     "shadcn": "^4.11.0",
     "tailwind-merge": "^3.3.1",
     "tw-animate-css": "^1.4.0"
   },
   "devDependencies": {
+    "@cloudflare/vite-plugin": "^1.54.10",
+    "@cloudflare/workers-types": "^5.20260916.1",
     "@tailwindcss/postcss": "^4.3.3",
     "@types/node": "^24",
     "@types/nodemailer": "^8.0.1",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@vinext/cloudflare": "1.0.0-beta.8",
+    "@vitejs/plugin-react": "^6.1.1",
+    "@vitejs/plugin-rsc": "^0.5.35",
     "postcss": "^8.5",
+    "react-server-dom-webpack": "^19.3.0",
     "tailwindcss": "^4.3.3",
-    "typescript": "5.7.3"
-  }
+    "typescript": "5.7.3",
+    "vinext": "1.0.0-beta.10",
+    "vite": "^8.3.0",
+    "wrangler": "^4.132.0"
+  },
+  "type": "module"
 }

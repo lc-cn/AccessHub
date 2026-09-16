@@ -7,6 +7,18 @@ test('parses a public API service and rejects private upstreams', () => {
   assert.deepEqual(parseServiceInput({ code: 'internal', name: 'Internal', baseUrl: 'http://127.0.0.1:8080' }), { ok: false, error: 'Base URL 不允许指向本机或私有网络' })
 })
 
+test('parses a private Worker Binding service without a public base URL', () => {
+  const parsed = parseServiceInput({ code: 'image-api', name: 'Image API', transport: 'worker_binding', bindingName: 'image_worker' })
+  assert.equal(parsed.ok, true)
+  if (parsed.ok) {
+    assert.equal(parsed.value.transport, 'worker_binding')
+    assert.equal(parsed.value.bindingName, 'IMAGE_WORKER')
+    assert.equal(parsed.value.baseUrl, 'https://image-api.internal')
+  }
+  assert.equal(parseServiceInput({ code: 'image-api', name: 'Image API', transport: 'worker_binding', bindingName: '123-worker' }).ok, false)
+  assert.deepEqual(parseServiceInput({ code: 'image-api', name: 'Image API', transport: 'invalid', baseUrl: 'https://api.example.com' }), { ok: false, error: '服务连接方式无效' })
+})
+
 test('validates an endpoint and its request parameters', () => {
   const parsed = parseServiceApiInput({ code: 'chat', name: 'Chat', path: '/chat/completions', method: 'post', usageUnits: 3, parameters: [{ name: 'model', location: 'body', dataType: 'string', required: true, description: '' }] })
   assert.equal(parsed.ok, true)

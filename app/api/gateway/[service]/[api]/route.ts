@@ -2,8 +2,9 @@ import { NextResponse } from 'next/server'
 import { and, eq } from 'drizzle-orm'
 import { auth } from '@/lib/auth'
 import { authenticateApiKey } from '@/lib/api-keys'
-import type { ServiceAuthType, ServiceParameter } from '@/lib/api-services'
+import type { ServiceAuthType, ServiceParameter, ServiceTransport } from '@/lib/api-services'
 import { prepareUpstreamRequest } from '@/lib/api-gateway-request'
+import { dispatchUpstreamRequest, UpstreamBindingUnavailableError } from '@/lib/upstream-transport'
 import { db } from '@/lib/db'
 import { apiServices, serviceApis } from '@/lib/db/schema'
 import { reserveApiUsage } from '@/lib/gateway-allowance'
@@ -16,6 +17,7 @@ async function gateway(request: Request, context: Context) {
   const principal = await authenticateGatewayRequest(request, serviceCode)
   if (!principal) return NextResponse.json({ error: 'unauthorized' }, { status: 401, headers: { 'www-authenticate': 'Bearer' } })
   const [target] = await db.select({
+    transport: apiServices.transport, bindingName: apiServices.bindingName,
     baseUrl: apiServices.baseUrl, authType: apiServices.authType, authConfigEncrypted: apiServices.authConfigEncrypted,
     apiId: serviceApis.id, path: serviceApis.path, method: serviceApis.method, parameters: serviceApis.parameters,
     usageUnits: serviceApis.usageUnits, timeoutMs: serviceApis.timeoutMs,
@@ -30,7 +32,15 @@ async function gateway(request: Request, context: Context) {
   if (!preflight.ok) return NextResponse.json(preflight.body, { status: preflight.status })
 
   try {
-    const upstream = await fetch(prepared.url, { method: target.method, headers: prepared.headers, body: prepared.body, redirect: 'manual', signal: AbortSignal.timeout(target.timeoutMs) })
+    const upstream = await dispatchUpstreamRequest({
+      transport: target.transport as ServiceTransport,
+      bindingName: target.bindingName,
+      url: prepared.url,
+      method: target.method,
+      headers: prepared.headers,
+      body: prepared.body,
+      timeoutMs: target.timeoutMs,
+    })
     const unitsToCharge = chargedUsageUnits(upstream.status, target.usageUnits)
     let reservation = preflight
     if (unitsToCharge > 0) {
@@ -48,6 +58,7 @@ async function gateway(request: Request, context: Context) {
     responseHeaders.set('x-accesshub-allowance-source', reservation.allowanceSource)
     return new Response(upstream.body, { status: upstream.status, headers: responseHeaders })
   } catch (error) {
+    if (error instanceof UpstreamBindingUnavailableError) return NextResponse.json({ error: 'upstream_binding_unavailable', detail: error.message, usageUnits: 0, configuredUsageUnits: target.usageUnits }, { status: 503 })
     const timeout = error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError')
     return NextResponse.json({ error: timeout ? 'upstream_timeout' : 'upstream_unavailable', usageUnits: 0, configuredUsageUnits: target.usageUnits }, { status: timeout ? 504 : 502 })
   }
