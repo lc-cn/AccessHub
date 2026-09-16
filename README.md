@@ -44,10 +44,10 @@ API keys may be limited to selected services and can be revoked immediately. Bro
 
 Email/password authentication is enabled only when SMTP delivery is completely configured. Set `SMTP_HOST`, `SMTP_FROM`, and, when authentication is required, both `SMTP_USER` and `SMTP_PASS`. Optional settings are `SMTP_PORT` (default `587`), `SMTP_SECURE` (default `false`), and `FRESH_SESSION_MAX_AGE_MINUTES` (default `15`). See [docs/smtp-deployment.md](docs/smtp-deployment.md) for deployment behavior; do not commit secret values.
 
-To enable Afdian account linking, also configure `AFDIAN_OAUTH_CLIENT_ID`, `AFDIAN_OAUTH_CLIENT_SECRET`, and the canonical `BETTER_AUTH_URL` (for production, `https://www.l2cl.link`). Register this OAuth callback URL with Afdian:
+To enable Afdian account linking, also configure `AFDIAN_OAUTH_CLIENT_ID`, `AFDIAN_OAUTH_CLIENT_SECRET`, and the canonical `BETTER_AUTH_URL` (for production, `https://l2cl.link`). Register this OAuth callback URL with Afdian:
 
 ```text
-https://www.l2cl.link/api/auth/callback/afdian
+https://l2cl.link/api/auth/callback/afdian
 ```
 
 ## Commerce and entitlements

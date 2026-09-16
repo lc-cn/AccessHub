@@ -20,13 +20,13 @@ test('signs OpenAPI params using the documented canonical string', () => {
 })
 
 test('addresses the order user and includes the generated code in the private message', () => {
-  const content = buildRedemptionMessage({ codes: ['AFD-AAA-BBB'], months: 3, siteUrl: 'https://www.l2cl.link' })
+  const content = buildRedemptionMessage({ codes: ['AFD-AAA-BBB'], months: 3, siteUrl: 'https://l2cl.link' })
   const request = buildAfdianMessageRequest({ token: 'secret', userId: 'creator', recipient: 'buyer', content, timestamp: 100 })
 
   assert.deepEqual(JSON.parse(request.params), { recipient: 'buyer', content })
   assert.match(content, /AFD-AAA-BBB/)
   assert.match(content, /核销之日起 3 个月/)
-  assert.match(content, /https:\/\/www\.l2cl\.link\/redeem-codes/)
+  assert.match(content, /https:\/\/l2cl\.link\/redeem-codes/)
 })
 
 test('never blindly resends a private message with an unknown outcome', () => {

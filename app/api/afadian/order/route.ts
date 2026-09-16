@@ -44,7 +44,7 @@ async function deliverOrderMessage(orderId: string, recipient: string, codes: st
   }).where(and(eq(orders.id, orderId), or(eq(orders.deliveryStatus, 'pending'), eq(orders.deliveryStatus, 'failed')))).returning({ id: orders.id })
   if (!claimed) return 'unknown'
 
-  const siteUrl = process.env.BETTER_AUTH_URL || 'https://www.l2cl.link'
+  const siteUrl = process.env.BETTER_AUTH_URL || 'https://l2cl.link'
   const result = await sendAfdianPrivateMessage(recipient, buildRedemptionMessage({ codes, months, siteUrl }))
   if (result.outcome === 'sent') {
     await db.update(orders).set({ deliveryStatus: 'sent', deliveredAt: new Date(), deliveryLastError: null }).where(eq(orders.id, orderId))

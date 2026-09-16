@@ -6,6 +6,10 @@
     "nodejs_compat"
   ],
   "main": "vinext/server/fetch-handler",
+  "routes": [
+    { "pattern": "l2cl.link", "custom_domain": true },
+    { "pattern": "www.l2cl.link", "custom_domain": true }
+  ],
   "assets": {
     "directory": "dist/client",
     "not_found_handling": "none",

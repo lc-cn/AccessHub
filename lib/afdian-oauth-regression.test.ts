@@ -22,8 +22,8 @@ describe('Afdian OAuth regression', () => {
   })
 
   it('generates redirect URI using BETTER_AUTH_URL', () => {
-    process.env.BETTER_AUTH_URL = 'https://www.l2cl.link'
-    assert.equal(afdianOAuthRedirectUri(), 'https://www.l2cl.link/api/auth/callback/afdian')
+    process.env.BETTER_AUTH_URL = 'https://l2cl.link'
+    assert.equal(afdianOAuthRedirectUri(), 'https://l2cl.link/api/auth/callback/afdian')
   })
 
   it('parses valid Afdian OAuth token payload', () => {

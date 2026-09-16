@@ -3,6 +3,16 @@ import { NextResponse } from 'next/server'
 import { getSessionCookie } from 'better-auth/cookies'
 
 export function proxy(request: NextRequest) {
+  if (request.nextUrl.hostname === 'www.l2cl.link') {
+    const canonical = request.nextUrl.clone()
+    canonical.hostname = 'l2cl.link'
+    return NextResponse.redirect(canonical, 308)
+  }
+
+  if (/^\/(?:api(?:\/|$)|login(?:\/|$)|reset-password(?:\/|$)|privacy(?:\/|$)|terms(?:\/|$))/.test(request.nextUrl.pathname)) {
+    return NextResponse.next()
+  }
+
   const requestedPath = `${request.nextUrl.pathname}${request.nextUrl.search}`
   if (!getSessionCookie(request)) {
     const login = new URL('/login', request.url)
@@ -16,5 +26,5 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/((?!api(?:/|$)|login(?:/|$)|reset-password(?:/|$)|privacy(?:/|$)|terms(?:/|$)|_next/static|_next/image|favicon.ico|.*\\..*).*)'],
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|.*\\..*).*)'],
 }

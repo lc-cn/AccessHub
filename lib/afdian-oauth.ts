@@ -13,7 +13,7 @@ export function isAfdianOAuthConfigured() {
 }
 
 export function afdianOAuthRedirectUri() {
-  const base = process.env.BETTER_AUTH_URL || 'https://www.l2cl.link'
+  const base = process.env.BETTER_AUTH_URL || 'https://l2cl.link'
   return new URL('/api/auth/callback/afdian', base).toString()
 }
 
