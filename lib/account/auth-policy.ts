@@ -8,6 +8,8 @@ export const SENSITIVE_AUTH_RATE_LIMITS = {
   '/change-email': { window: 60, max: 5 },
 } as const
 
+export const AUTH_IP_ADDRESS_HEADERS = ['cf-connecting-ip'] as const
+
 export function getAccountAuthPolicy() {
   return {
     emailEnabled: isEmailAvailable(),

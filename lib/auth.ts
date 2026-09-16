@@ -7,7 +7,7 @@ import { allTables } from '@/lib/db/schema'
 import { AFDIAN_PROVIDER_ID, afdianOAuthRedirectUri, exchangeAfdianOAuthCode, isAfdianOAuthConfigured } from '@/lib/afdian-oauth'
 import { sendVerificationEmail, sendEmailChangeVerification } from '@/lib/email/verification'
 import { sendPasswordResetEmail } from '@/lib/email/password-reset'
-import { getAccountAuthPolicy } from '@/lib/account/auth-policy'
+import { AUTH_IP_ADDRESS_HEADERS, getAccountAuthPolicy } from '@/lib/account/auth-policy'
 import { recordSecurityEventBestEffort } from '@/lib/account/security-events'
 import { ensureDefaultApiKey } from '@/lib/api-keys'
 
@@ -98,7 +98,12 @@ export const auth = betterAuth({
     getUserInfo: async (tokens) => tokens.accessToken ? ({ id: tokens.accessToken, name: '爱发电用户', emailVerified: false }) : null,
     accountSubject: ({ profile }) => String(profile.id || ''),
   }] })] : [],
-  ...(process.env.NODE_ENV === 'development' ? { advanced: { defaultCookieAttributes: { sameSite: 'none' as const, secure: true } } } : {}),
+  advanced: {
+    ipAddress: { ipAddressHeaders: [...AUTH_IP_ADDRESS_HEADERS] },
+    ...(process.env.NODE_ENV === 'development'
+      ? { defaultCookieAttributes: { sameSite: 'none' as const, secure: true } }
+      : {}),
+  },
 })
 
 export async function getSession() { return auth.api.getSession({ headers: await headers() }) }

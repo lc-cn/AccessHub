@@ -1,6 +1,6 @@
 import { afterEach, describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { getAccountAuthPolicy, SENSITIVE_AUTH_RATE_LIMITS } from './account/auth-policy.ts'
+import { AUTH_IP_ADDRESS_HEADERS, getAccountAuthPolicy, SENSITIVE_AUTH_RATE_LIMITS } from './account/auth-policy.ts'
 import { resetEmailConfigCache } from './email/config.ts'
 
 describe('account auth policy', () => {
@@ -40,5 +40,9 @@ describe('account auth policy', () => {
       '/send-verification-email',
       '/sign-up/email',
     ])
+  })
+
+  it('trusts Cloudflare client IP headers for per-client rate limiting', () => {
+    assert.deepEqual(AUTH_IP_ADDRESS_HEADERS, ['cf-connecting-ip'])
   })
 })

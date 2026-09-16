@@ -18,6 +18,9 @@
   "observability": {
     "enabled": true
   },
+  "placement": {
+    "region": "aws:us-east-1"
+  },
   // Keep values out of source control. Upload them with Wrangler as encrypted
   // Worker secrets; this list is also validated before development/deployment.
   "secrets": {

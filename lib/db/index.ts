@@ -1,7 +1,8 @@
-import { drizzle } from 'drizzle-orm/node-postgres'
+import { drizzle, type NodePgDatabase } from 'drizzle-orm/node-postgres'
 import { Client, Pool, type PoolClient, type QueryResult } from 'pg'
 import { normalizeDatabaseUrl } from '@/lib/database-url'
 import { getHyperdriveConnectionString } from '#accesshub-platform-bindings'
+import { createRequestDatabaseRunner } from './request-database'
 import * as schema from './schema'
 
 let nodePool: Pool | null = null
@@ -51,3 +52,12 @@ class RequestScopedPool {
 
 export const pool = new RequestScopedPool() as unknown as Pool
 export const db = drizzle(pool, { schema })
+
+type AccessHubDatabase = NodePgDatabase<typeof schema>
+
+export const withRequestDatabase = createRequestDatabaseRunner<AccessHubDatabase, Client>({
+  resolveConnectionString: getHyperdriveConnectionString,
+  connect: connectHyperdrive,
+  createDatabase: (client) => drizzle(client, { schema }),
+  fallback: db,
+})
