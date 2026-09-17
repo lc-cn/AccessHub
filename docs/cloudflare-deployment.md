@@ -43,6 +43,8 @@ Also configure `BETTER_AUTH_URL`, `SMTP_PORT`, `SMTP_SECURE`, and `FRESH_SESSION
 
 Only set optional Afdian, OAuth, or SMTP values for features that are enabled. Never copy `.env.local` into the Worker bundle.
 
+On Cloudflare, a Mailjet SMTP configuration is sent through Mailjet Send API v3.1 over HTTPS instead of opening an SMTP TCP socket. Keep `SMTP_HOST=in-v3.mailjet.com`; `SMTP_USER` and `SMTP_PASS` are used as the Mailjet API Key and Secret Key. Node deployments continue to use the configured SMTP endpoint through Nodemailer.
+
 ## 3. Apply the database migration
 
 Apply SQL files through `drizzle/0015_commerce_orchestration.sql` to the existing PostgreSQL database before deploying the asynchronous commerce worker. Existing services are retained as `http` transports, and existing services remain open to all authenticated users until a required permission is selected.

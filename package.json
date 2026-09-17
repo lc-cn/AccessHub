@@ -8,6 +8,11 @@
       "workerd": "./lib/platform-bindings.cloudflare.ts",
       "worker": "./lib/platform-bindings.cloudflare.ts",
       "default": "./lib/platform-bindings.ts"
+    },
+    "#accesshub-email-transport": {
+      "workerd": "./lib/email/transport.cloudflare.ts",
+      "worker": "./lib/email/transport.cloudflare.ts",
+      "default": "./lib/email/transport.ts"
     }
   },
   "scripts": {
