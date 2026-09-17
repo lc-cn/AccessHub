@@ -101,7 +101,7 @@ Generate one strong random `COMMERCE_INTERNAL_SECRET` locally, then enter the sa
 ```bash
 openssl rand -base64 48
 pnpm exec wrangler secret put COMMERCE_INTERNAL_SECRET --config dist/server/wrangler.json
-pnpm exec wrangler secret put COMMERCE_INTERNAL_SECRET --config wrangler.commerce.jsonc
+pnpm exec wrangler secret put COMMERCE_INTERNAL_SECRET --config workers/commerce/wrangler.jsonc
 ```
 
 The main `accesshub` Worker is only a Queue producer. The commerce Worker is the consumer and owns these durable processes:

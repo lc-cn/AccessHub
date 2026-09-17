@@ -34,7 +34,6 @@ jobs:
       - run: pnpm test
       - run: pnpm typecheck
       - name: Deploy commerce worker
-        run: pnpm exec wrangler deploy --config wrangler.commerce.jsonc --message "git:${GITHUB_SHA}" --tag "git-${GITHUB_SHA::12}"
+        run: pnpm exec wrangler deploy --config workers/commerce/wrangler.jsonc --message "git:${GITHUB_SHA}" --tag "git-${GITHUB_SHA::12}"
       - name: Deploy AccessHub worker
         run: pnpm exec wrangler deploy --config dist/server/wrangler.json --message "git:${GITHUB_SHA}" --tag "git-${GITHUB_SHA::12}"
-

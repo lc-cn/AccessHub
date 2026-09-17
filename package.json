@@ -25,8 +25,8 @@
     "build:vinext": "vinext build",
     "start:vinext": "wrangler dev --config dist/server/wrangler.json",
     "deploy:vinext": "vinext-cloudflare deploy --config dist/server/wrangler.json",
-    "types:commerce": "wrangler types --config wrangler.commerce.jsonc --env-interface CommerceWorkerEnv workers/commerce/worker-configuration.d.ts",
-    "deploy:commerce": "wrangler deploy --config wrangler.commerce.jsonc"
+    "types:commerce": "wrangler types --config workers/commerce/wrangler.jsonc --env-interface CommerceWorkerEnv workers/commerce/worker-configuration.d.ts",
+    "deploy:commerce": "wrangler deploy --config workers/commerce/wrangler.jsonc"
   },
   "dependencies": {
     "@base-ui/react": "^1.5.0",

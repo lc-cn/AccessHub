@@ -1,7 +1,7 @@
 {
-  "$schema": "node_modules/wrangler/config-schema.json",
+  "$schema": "../../node_modules/wrangler/config-schema.json",
   "name": "accesshub-commerce",
-  "main": "workers/commerce/index.ts",
+  "main": "index.ts",
   "compatibility_date": "2026-09-17",
   "compatibility_flags": ["nodejs_compat"],
   "workers_dev": false,
