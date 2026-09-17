@@ -2,17 +2,19 @@
 
 ## Release
 
-Production deploys are owned by `.github/workflows/deploy.yml`. Configure the
-GitHub `production` environment with:
+Production deploys are owned by Cloudflare Workers Builds. Both Workers are
+connected to `lc-cn/l2cl`, listen to `master`, and deploy independently after a
+push:
 
-- secret `CLOUDFLARE_API_TOKEN`, scoped to Workers Scripts and the AccessHub account;
-- secret `CLOUDFLARE_ACCOUNT_ID`;
-- variable `NEXT_PUBLIC_AFDIAN_URL`.
+- `accesshub` builds from the repository root and requires the public build
+  variable `NEXT_PUBLIC_AFDIAN_URL`;
+- `accesshub-commerce` uses `/workers/commerce` as its root directory, runs the
+  Commerce TypeScript check, and deploys with `pnpm run deploy:commerce` from the
+  repository root.
 
-The workflow runs tests and both TypeScript builds, deploys the Commerce Worker
-before the main Worker, and records `git:<sha>` as the Cloudflare version message
-and `git-<12-char-sha>` as its tag. Runtime secrets remain managed by Wrangler and
-are not copied into GitHub.
+GitHub Actions runs `.github/workflows/ci.yml` only; it verifies tests and types
+but does not hold Cloudflare credentials or deploy production. Runtime secrets
+remain managed in each Worker's Cloudflare settings.
 
 Database migrations are deliberately not automatic. Apply and verify them before
 merging code that depends on a new schema.
@@ -23,7 +25,7 @@ merging code that depends on a new schema.
 2. Unauthenticated `/api/dashboard` returns `401`.
 3. Sign in and load `/dashboard`, `/services`, and `/account/security`.
 4. Invoke one free and one billable endpoint. Only an exact upstream `200` may charge usage.
-5. Confirm the deployed versions show the expected `git:<sha>` message.
+5. Confirm both Cloudflare Workers Builds checks succeeded for the expected commit.
 
 ## Alerts
 

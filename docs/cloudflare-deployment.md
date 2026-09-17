@@ -156,6 +156,22 @@ Validate these paths on the `workers.dev` preview URL:
 5. Redeem-code fulfillment, Afdian webhook idempotency, Queue/Workflow progress, DLQ behavior, and private-message delivery.
 6. Password reset and verification email through the configured HTTPS email transport (Mailjet in the current Cloudflare adapter).
 
+### Production Git builds
+
+Cloudflare Workers Builds owns production deployment; GitHub Actions remains the
+verification-only CI. Connect the same `lc-cn/l2cl` repository to both Workers:
+
+| Worker | Root directory | Build command | Deploy command |
+| --- | --- | --- | --- |
+| `accesshub` | `/` | `pnpm run build:vinext` | `pnpm exec wrangler deploy --config dist/server/wrangler.json` |
+| `accesshub-commerce` | `/workers/commerce` | `pnpm --dir ../.. exec tsc --noEmit -p workers/commerce/tsconfig.json` | `pnpm --dir ../.. run deploy:commerce` |
+
+Use `master` as the production branch. Keep non-production branch builds disabled
+until their preview bindings and secrets are provisioned. Configure
+`NEXT_PUBLIC_AFDIAN_URL` as a build variable on `accesshub`; Commerce requires no
+build-time secret. Runtime secrets belong in each Worker's Runtime variables and
+secrets section, not in Workers Builds or GitHub.
+
 ## 7. Cut over the production domain
 
 After preview acceptance:
