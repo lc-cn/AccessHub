@@ -1,94 +1,126 @@
-# l2cl
+# AccessHub
 
-This is a [Next.js](https://nextjs.org) project bootstrapped with [v0](https://v0.app).
+**把 API 服务、访问权限、调用配额和订阅权益放在同一个平台管理。**
 
-## Built with v0
+AccessHub 是面向 API 服务提供者的可自行部署的管理平台。管理员配置上游服务、接口和访问规则，用户在工作台获取 API Key、查看权益并测试接口；请求经过统一网关进行身份校验、权限检查、配额预留和用量结算。
 
-This repository is linked to a [v0](https://v0.app) project. You can continue developing by visiting the link below -- start new chats to make changes, and v0 will push commits directly to this repo. Every merge to `main` will automatically deploy.
+[部署文档](docs/cloudflare-deployment.md) · [身份接入](docs/rbac-oidc.md) · [领域模型](CONTEXT.md) · [Issues](https://github.com/lc-cn/AccessHub/issues) · [Apache-2.0](LICENSE)
 
-[Continue working on v0 →](https://v0.app/chat/projects/prj_w3KXlM81N1PVA0RcA0xkmtfdrd8k)
+## 能做什么
 
-## Getting Started
+| 能力 | 当前实现 |
+| --- | --- |
+| 服务接入 | 管理上游服务与接口、请求参数白名单；支持 HTTP 上游和 Cloudflare Worker Service Binding |
+| 统一网关 | 服务端注入 Bearer、Header、Query 或 Basic Auth 凭据，统一校验用户权限 |
+| API Key | 默认 Key、自定义 Key、撤销、浏览器测试控制台；自定义 Key 仅创建时返回明文 |
+| 权限与配额 | 服务权限、计划阶梯、分钟限速、日/周/月配额及 Credits 额度回落 |
+| 商品与权益 | 本地 SKU、订单、支付记录、订阅、兑换码与权益核销 |
+| 爱发电适配 | 商品映射、付款事件去重、兑换码履约及私信交付 |
+| 异步运维 | 独立 Commerce Worker、Queue、Workflows、事务 Outbox、死信查看与人工重放 |
+| 用户账号 | GitHub 登录、可选 OIDC 登录、邮件登录、Passkey、多因素认证及会话管理 |
 
-First, run the development server:
+支付平台提供付款事实，AccessHub 维护本地订单、订阅与最终 API 权益。当前已接入的支付适配器是爱发电；领域模型中出现其他支付平台名称，不代表已经实现其适配器。
+
+## 一次 API 调用如何完成
+
+```text
+客户端携带 API Key
+  → 网关校验身份、权限与参数
+  → 预留调用额度
+  → 注入上游凭据并转发请求
+  → 按响应结果结算用量
+```
+
+程序调用和浏览器测试使用同一套网关：
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
+curl https://your-accesshub.example/api/gateway/service-code/api-code \
+  -H 'Authorization: Bearer YOUR_API_KEY'
+```
+
+实际 HTTP 方法与参数由管理员配置的接口决定。API Key 标识用户，服务访问权由用户当前权限决定。上游凭据保留在服务端，不交给调用方；网关不跟随上游重定向。
+
+当前只有上游返回 **HTTP 200** 才结算配置的调用单位；网络失败、超时和其他状态不扣除配额。计划额度按付费计划、默认计划、Credits 的顺序回落，具体规则见 [领域模型](CONTEXT.md)。
+
+## 与 ProfileHub 一起使用
+
+[ProfileHub](https://github.com/lc-cn/ProfileHub) 是配套的身份与权限管理项目。AccessHub 可通过 Better Auth Generic OAuth 接入 ProfileHub，使用 PKCE、Discovery 和 JWKS 验证身份，然后建立自己的会话。
+
+两个项目可以独立使用。接入 ProfileHub 不会自动同步其组织角色，也不会自动赋予 AccessHub 的 API 权限或订阅权益。配置方式见 [OIDC 接入指南](docs/rbac-oidc.md)。
+
+## 本地开发
+
+技术栈为 TypeScript、Next.js / React、Better Auth、PostgreSQL / Drizzle ORM、Tailwind CSS。Cloudflare 部署通过 vinext 构建。
+
+准备 Node.js 24、pnpm 10 和独立的 PostgreSQL 开发数据库：
+
+```bash
+git clone https://github.com/lc-cn/AccessHub.git
+cd AccessHub
+pnpm install
+```
+
+**数据库初始化仍需手动准备。** 当前 `drizzle/` 保存的是从历史结构演进的增量 SQL，第一份迁移依赖已有表，尚未提供可以直接从空库运行的一键初始化流程。请结合 [当前 Schema](lib/db/schema.ts) 和 [数据库完整性说明](docs/database-integrity.md) 准备数据库；不要把全部历史 SQL 当作空库建表脚本直接执行。
+
+在根目录创建 `.env.local`，配置自己的连接与独立随机密钥：
+
+```dotenv
+DATABASE_URL=postgresql://user:password@localhost:5432/accesshub
+BETTER_AUTH_URL=http://localhost:3000
+BETTER_AUTH_SECRET=replace-with-a-random-secret
+SERVICE_CREDENTIALS_KEY=replace-with-another-random-secret-at-least-32-characters
+GITHUB_CLIENT_ID=your-github-client-id
+GITHUB_CLIENT_SECRET=your-github-client-secret
+```
+
+GitHub 登录回调为 `http://localhost:3000/api/auth/callback/github`。数据库准备完成后运行：
+
+```bash
 pnpm dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+打开 <http://localhost:3000>。当前管理员引导逻辑会在不存在管理员时，将首次通过管理员权限检查的已登录用户提升为管理员；首次部署应在受控环境中完成该步骤，再开放注册与访问。
 
-The application expects `DATABASE_URL`, `BETTER_AUTH_SECRET`, `GITHUB_CLIENT_ID`, and `GITHUB_CLIENT_SECRET`. Set `NEXT_PUBLIC_AFDIAN_URL` to the creator page used by the generic upgrade call to action.
+### 按需启用
 
-API service credentials are encrypted at rest with `SERVICE_CREDENTIALS_KEY`. Generate a dedicated random value locally and configure the same value in every runtime environment; rotating it invalidates existing encrypted upstream credentials. Do not commit it. For Cloudflare, enter it through Wrangler's interactive prompt:
+- **邮件登录与找回密码**：配置完整的 SMTP 参数后启用，见 [邮件部署](docs/smtp-deployment.md)。
+- **ProfileHub 登录**：配置 `RBAC_ISSUER_URL`、`RBAC_CLIENT_ID`、`RBAC_CLIENT_SECRET`，见 [身份接入](docs/rbac-oidc.md)。
+- **爱发电账号绑定与履约**：需要自己的 OAuth 应用、创作者凭据、Webhook Secret 和商品映射；异步履约还依赖下述 Commerce Worker。
 
-```bash
-pnpm exec wrangler secret put SERVICE_CREDENTIALS_KEY --config dist/server/wrangler.json
-```
+`SERVICE_CREDENTIALS_KEY` 用于加密上游凭据及可供测试控制台读取的默认 API Key。应稳定保存，直接替换会使现有密文无法解密。环境文件及任何真实凭据均不应提交到仓库。
 
-Administrators define upstream services under `/admin/services`, then publish endpoints at `/api/gateway/<service-code>/<api-code>`. Upstream authentication supports Bearer, custom Header, Query parameter, and Basic Auth. The gateway validates the configured parameter allow-list, reserves the endpoint's configured usage units, injects upstream authentication server-side, and does not follow upstream redirects.
+## 部署结构
 
-Services can use either a public HTTP origin or a private Cloudflare Worker Service Binding. Worker Binding services avoid public DNS and network transit, while preserving the same API contract, authentication injection, allowance checks, and success-only billing behavior. See [docs/cloudflare-deployment.md](docs/cloudflare-deployment.md) for deployment, Hyperdrive, binding, and cutover instructions.
+完整的异步商业流程使用以下组件：
 
-Users receive a system-managed default API key and can create additional keys under `/api-keys` in My Workspace. Custom keys are returned once and stored only as SHA-256 hashes. The default key is encrypted at rest so the browser Test Console can retrieve it for authenticated test calls. API keys identify the user; service access is decided only by the user's current permissions, with no second service-scope system. Programmatic clients call the gateway with:
+- **Web Worker**：管理界面、账号体系、API 网关和支付回调入口。
+- **Commerce Worker**：订单履约与订阅周期处理。
+- **PostgreSQL**：账号、权限、用量、订单和权益的事实存储。
+- **Cloudflare Hyperdrive、KV、Queues 与 Workflows**：数据库连接、服务目录缓存和异步任务执行。
 
-```text
-Authorization: Bearer ahk_...
-```
+仓库中的 Wrangler 配置带有现有部署的资源名称、域名和绑定 ID。自行部署时必须替换为自己的资源，并分别配置 Web 与 Commerce Worker 的 Secret；不能直接使用这些绑定。部署步骤见 [Cloudflare 部署文档](docs/cloudflare-deployment.md)。
 
-API keys can be revoked immediately. Browser-based testing under `/services` retrieves the signed-in user's default key and calls the same Bearer-authenticated gateway used by external clients. Billable units are committed only when the upstream responds with HTTP 200; network failures, timeouts, and non-200 responses do not consume quota.
+`pnpm dev` 可用于 Node.js 下开发页面与 HTTP 接口；Worker Service Binding、Queue 和 Workflows 需要对应的 Cloudflare 运行环境。仅启动 Next.js 不代表完整的异步履约系统已经运行。
 
-Email/password authentication is enabled only when SMTP delivery is completely configured. Set `SMTP_HOST`, `SMTP_FROM`, and, when authentication is required, both `SMTP_USER` and `SMTP_PASS`. Optional settings are `SMTP_PORT` (default `587`), `SMTP_SECURE` (default `false`), and `FRESH_SESSION_MAX_AGE_MINUTES` (default `15`). See [docs/smtp-deployment.md](docs/smtp-deployment.md) for deployment behavior; do not commit secret values.
+付款事件以幂等方式记录；交付结果不明确时保留待人工核对，避免自动重发私信。死信与履约处理说明见 [运维文档](docs/operations-runbook.md)。
 
-To enable Afdian account linking, also configure `AFDIAN_OAUTH_CLIENT_ID`, `AFDIAN_OAUTH_CLIENT_SECRET`, and the canonical `BETTER_AUTH_URL` (for production, `https://l2cl.link`). Register this OAuth callback URL with Afdian:
+## 开发与贡献
 
-```text
-https://l2cl.link/api/auth/callback/afdian
-```
+| 命令 | 用途 |
+| --- | --- |
+| `pnpm dev` | Next.js 本地开发 |
+| `pnpm build` | Next.js 生产构建 |
+| `pnpm dev:vinext` | Cloudflare 开发入口 |
+| `pnpm build:vinext` | 构建 Web Worker |
+| `pnpm test` | 业务及 Commerce Worker 测试 |
+| `pnpm typecheck` | 类型生成、检查及 vinext 构建 |
 
-## Commerce and entitlements
+页面与接口位于 `app/`，核心业务规则位于 `lib/`，异步商业流程位于 `workers/commerce/`，数据库迁移位于 `drizzle/`。
 
-AccessHub owns its product catalog, orders, payments, subscriptions, and final API entitlements. A payment service provider (PSP) such as Afdian only supplies checkout and payment facts through an adapter. Provider offers map to local SKUs; plan SKUs create subscriptions, while credits SKUs create additive credit grants.
+欢迎提交 Issue 和 Pull Request。涉及配额、支付、订阅、权限或幂等性的修改，请附上行为变化与测试；数据库变更请说明迁移条件。问题报告请移除用户数据和凭据。
 
-The subscription state machine supports `pending_activation`, `trialing`, `active`, `past_due`, `paused`, `canceled`, and `expired`. Only active subscriptions grant API access. Every transition is validated and recorded in `subscription_events`; payment callbacks are first stored idempotently in `provider_events`.
+## 许可证
 
-Subscription-plan minute, daily, weekly, and monthly limits accept `-1` for unlimited access. Credits are consumed one at a time only after a base subscription plan limit is reached; grants that expire sooner are consumed first. Entitlement terms support `day`, `month`, `quarter`, and `year`, while a duration value of `-1` means permanent.
+Copyright 2026 AccessHub contributors.
 
-## Afdian automatic fulfillment
-
-Configure Afdian's order webhook to call:
-
-```text
-https://your-domain.example/api/afadian/order?token=<AFDIAN_WEBHOOK_SECRET>
-```
-
-Set `AFDIAN_WEBHOOK_SECRET` to a long random value and redact the webhook query string from access logs. To send generated codes through Afdian private messages, also configure the creator account's `AFDIAN_USER_ID` and OpenAPI token as `AFDIAN_ADMIN_TOKEN`.
-
-Create the local SKU first, then connect the Afdian plan or Afdian SKU under `/admin/afdian/mappings`. Afdian SKU mappings take precedence over Afdian plan mappings. An enabled plan mapping also turns the corresponding dashboard plan card into a direct Afdian checkout link.
-
-The webhook accepts paid orders only and uses the pair `(provider, out_trade_no)` as its idempotency key. It durably records the callback, writes a transactional Outbox event, and returns after publishing to Cloudflare Queue. The separate Commerce Worker starts deterministic order Workflows that generate `AFD-...` codes and deliver the Afdian private message. Each plan code owns an independent pending subscription; its effective period starts only when that code is redeemed, at which point a subscription-period Workflow is scheduled. The buyer is notified through `/api/open/send-msg`, using `data.order.user_id` as `recipient`. `/admin/afdian/orders` shows the PSP-specific order view and its Webhook → Queue → Workflow → fulfillment timeline, while `/admin/orders`, `/admin/payments`, and `/admin/subscriptions` show provider-independent commerce state. Definite message failures may retry; unknown delivery outcomes are held for manual reconciliation to avoid duplicate messages. Queue dead letters are persisted in PostgreSQL and can be inspected and explicitly replayed from `/admin/operations`.
-
-Apply SQL files in `drizzle/` to the PostgreSQL database before deploying schema-dependent changes.
-
-## Console routes
-
-The console uses path-based routes rather than query-string views:
-
-- `/dashboard`, `/services`, `/api-keys`, and `/redeem-codes` are regular user pages.
-- `/admin/services`, `/admin/plans`, `/admin/skus`, `/admin/redeem-codes`, `/admin/subscriptions`, `/admin/orders`, `/admin/payments`, `/admin/users`, `/admin/operations`, and `/admin/logs` are provider-independent administrator pages.
-- `/admin/afdian/mappings`, `/admin/afdian/orders`, and `/admin/afdian/events` are the Afdian PSP adapter pages.
-- New resources use `/new`; editable resources use `/{id}`.
-
-`/` redirects to `/dashboard`. The old `?view=` navigation is intentionally unsupported.
-
-## Learn More
-
-To learn more, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-- [v0 Documentation](https://v0.app/docs) - learn about v0 and how to use it.
+本项目采用 [Apache License 2.0](LICENSE)。第三方依赖遵循各自的许可证。

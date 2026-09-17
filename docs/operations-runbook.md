@@ -3,7 +3,7 @@
 ## Release
 
 Production deploys are owned by Cloudflare Workers Builds. Both Workers are
-connected to `lc-cn/l2cl`, listen to `master`, and deploy independently after a
+connected to `lc-cn/AccessHub`, listen to `master`, and deploy independently after a
 push:
 
 - `accesshub` builds from the repository root and requires the public build

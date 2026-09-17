@@ -159,7 +159,7 @@ Validate these paths on the `workers.dev` preview URL:
 ### Production Git builds
 
 Cloudflare Workers Builds owns production deployment; GitHub Actions remains the
-verification-only CI. Connect the same `lc-cn/l2cl` repository to both Workers:
+verification-only CI. Connect the same `lc-cn/AccessHub` repository to both Workers:
 
 | Worker | Root directory | Build command | Deploy command |
 | --- | --- | --- | --- |

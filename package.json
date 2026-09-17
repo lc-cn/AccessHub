@@ -1,5 +1,6 @@
 {
-  "name": "my-project",
+  "name": "accesshub",
+  "license": "Apache-2.0",
   "version": "0.1.0",
   "private": true,
   "packageManager": "pnpm@10.17.1",

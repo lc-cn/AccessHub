@@ -16,6 +16,7 @@ import { recordSecurityEventBestEffort } from '@/lib/account/security-events'
 import { ensureDefaultApiKey } from '@/lib/api-keys'
 import { strongAuthenticationPlugin } from '@/lib/auth-assurance-plugin'
 
+function createAuth() {
 const origins = [
   'http://localhost:3000',
   ...['V0_RUNTIME_URL', 'V0_DEV_APP_URL', 'V0_BUILD_URL', 'V0_SANDBOX_URL'].map((key) => process.env[key]).filter(Boolean).map((value) => value!.startsWith('http') ? value! : `https://${value}`),
@@ -27,9 +28,8 @@ const emailReady = accountAuthPolicy.emailEnabled
 const baseURL = process.env.BETTER_AUTH_URL || (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : process.env.V0_RUNTIME_URL || 'http://localhost:3000')
 const relyingParty = new URL(baseURL)
 const rbacOAuth = getRbacOAuthConfig()
-console.info("RBAC initialization diagnostics", { configured: Boolean(rbacOAuth) })
 
-export const auth = betterAuth({
+return betterAuth({
   database: drizzleAdapter(db, { provider: 'pg', schema: allTables }),
   baseURL,
   trustedOrigins: [...origins, relyingParty.origin],
@@ -136,5 +136,21 @@ export const auth = betterAuth({
       : {}),
   },
 })
+
+}
+
+let authInstance: ReturnType<typeof createAuth> | undefined
+function getAuth() {
+  // Generic OAuth performs discovery during initialization. Workers only allow
+  // outbound I/O inside a request, so do not initialize at module evaluation.
+  return authInstance ??= createAuth()
+}
+
+export const auth = {
+  handler(request: Request) { return getAuth().handler(request) },
+  get api() { return getAuth().api },
+  get $context() { return getAuth().$context },
+  get options() { return getAuth().options },
+}
 
 export async function getSession() { return auth.api.getSession({ headers: await headers() }) }
