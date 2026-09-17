@@ -4,7 +4,7 @@ import { hasWorkerServiceBinding, workerServiceBindings } from './worker-service
 
 test('exposes only declared Worker service bindings to the admin catalog', () => {
   assert.deepEqual(workerServiceBindings, [
-    { binding: 'QQSIGN', service: 'qqsign', label: 'QQSign' },
+    { binding: 'QQSIGN', service: 'qsign', label: 'QQSign' },
   ])
   assert.equal(hasWorkerServiceBinding('QQSIGN'), true)
   assert.equal(hasWorkerServiceBinding('UNKNOWN'), false)

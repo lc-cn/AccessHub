@@ -9,7 +9,7 @@ export type WorkerServiceBindingOption = {
  * Keep this list aligned with wrangler.jsonc `services` bindings.
  */
 export const workerServiceBindings: readonly WorkerServiceBindingOption[] = [
-  { binding: 'QQSIGN', service: 'qqsign', label: 'QQSign' },
+  { binding: 'QQSIGN', service: 'qsign', label: 'QQSign' },
 ]
 
 export function hasWorkerServiceBinding(binding: string | null) {

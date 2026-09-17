@@ -47,7 +47,7 @@
   // Each private upstream selected in the admin UI must be declared here.
   // The `binding` value is stored by AccessHub; `service` is the target Worker's deployed name.
   "services": [
-    { "binding": "QQSIGN", "service": "qqsign" }
+    { "binding": "QQSIGN", "service": "qsign" }
   ],
   // After creating Hyperdrive, uncomment this binding and replace the id.
   "hyperdrive": [

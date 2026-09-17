@@ -19,7 +19,7 @@ export function ServiceCatalog({ mode, resourceId }: { mode: 'list' | 'service' 
   const [serviceCode, apiCode] = mode === 'api' ? String(resourceId || '').split(':', 2) : [resourceId, undefined]
   const service = useMemo(() => services.find((item) => item.code === serviceCode) ?? null, [serviceCode, services])
   const api = useMemo(() => service?.apis.find((item) => item.code === apiCode) ?? null, [apiCode, service])
-  const load = useCallback(async () => { setLoading(true); try { const data = await requestJson<{ services: CatalogService[] }>('/api/services', { cache: 'no-store' }); setServices(data.services); setError('') } catch (reason) { setError(reason instanceof Error ? reason.message : '服务目录读取失败') } finally { setLoading(false) } }, [])
+  const load = useCallback(async () => { try { const data = await requestJson<{ services: CatalogService[] }>('/api/services', { cache: 'no-store' }); setServices(data.services); setError('') } catch (reason) { setError(reason instanceof Error ? reason.message : '服务目录读取失败') } finally { setLoading(false) } }, [])
   useEffect(() => { void load() }, [load])
   useWorkspaceRefresh(load)
 
