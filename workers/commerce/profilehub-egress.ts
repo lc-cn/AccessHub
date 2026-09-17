@@ -1,4 +1,5 @@
 const PROFILEHUB_ORIGIN = 'https://profile.l2cl.link'
+const PROFILEHUB_RESOLVE_OVERRIDE = 'profile-origin.l2cl.link'
 
 const ALLOWED_ENDPOINTS = new Map<string, ReadonlySet<string>>([
   ['/.well-known/openid-configuration', new Set(['GET'])],
@@ -25,5 +26,7 @@ export async function proxyProfileHubRequest(
     body,
     redirect: 'follow',
   })
-  return upstreamFetch(upstreamRequest)
+  return upstreamFetch(upstreamRequest, {
+    cf: { resolveOverride: PROFILEHUB_RESOLVE_OVERRIDE },
+  })
 }
