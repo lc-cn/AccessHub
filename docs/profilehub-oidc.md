@@ -48,4 +48,6 @@ Better Auth 的 `providerId` 与回调路径中的 `rbac` 保留：这是已有�
 
 Workers 不允许模块初始化期间发起 Discovery 网络请求，因此 `lib/auth.ts` 延迟至请求期间创建并缓存 Better Auth 实例。不要恢复模块顶层的 `betterAuth(...)` 调用，否则 Generic OAuth Provider 可能被跳过，登录返回 `PROVIDER_NOT_FOUND`。
 
+AccessHub 与 ProfileHub 位于同一个 Cloudflare Zone，而 ProfileHub 的源站在 Vercel。主 Worker 必须保留 `global_fetch_private_origin` 兼容标志，让 Discovery 请求直接访问 DNS 源站，避免请求重新进入 Cloudflare Worker 路由并形成循环重定向。
+
 已通过生产 HTTPS 脚本验证登录、回调、JWKS 验签、PostgreSQL 建号 hook、默认 API Key、刷新、UserInfo、RP/IdP 双端退出及 state 返回。使用独立 Cookie 容器和非管理员测试账号；测试账号及默认 API Key 已清理，IdP 测试账号已禁用并撤销刷新令牌。浏览器仅确认登录入口渲染，尚未完成完整浏览器点击式 E2E。

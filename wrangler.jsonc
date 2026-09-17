@@ -3,7 +3,10 @@
   "name": "accesshub",
   "compatibility_date": "2026-09-17",
   "compatibility_flags": [
-    "nodejs_compat"
+    "nodejs_compat",
+    // ProfileHub is an external Vercel origin on the same l2cl.link zone.
+    // Bypass same-zone Worker routing so OIDC discovery cannot loop back.
+    "global_fetch_private_origin"
   ],
   "main": "vinext/server/fetch-handler",
   "routes": [
