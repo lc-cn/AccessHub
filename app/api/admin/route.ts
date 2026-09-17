@@ -13,6 +13,7 @@ import { subscriptionStatuses, type SubscriptionStatus } from '@/lib/subscriptio
 import { transitionSubscription } from '@/lib/subscription-service'
 import { hasWorkerServiceBinding, workerServiceBindings } from '@/lib/worker-service-bindings'
 import { parsePermissionInput } from '@/lib/permissions'
+import { invalidateServiceCatalog } from '@/lib/read-model-cache'
 
 async function requireAdmin() {
   const session = await auth.api.getSession({ headers: await headers() })
@@ -191,6 +192,7 @@ export async function POST(request: Request) {
     catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : '服务鉴权配置加密失败' }, { status: 503 }) }
     const [created] = await db.insert(apiServices).values({ id: randomUUID(), ...parsed.value, authConfigEncrypted }).returning()
     await recordActivity({ actorId, action: 'api_service.created', resourceType: 'api_service', resourceId: created.id, detail: `${created.code} ${created.name}` })
+    await invalidateServiceCatalog()
     return NextResponse.json({ service: { ...serializeApiService(created), apis: [] } })
   }
   if (body.type === 'service-api') {
@@ -203,6 +205,7 @@ export async function POST(request: Request) {
     if (sameCode) return NextResponse.json({ error: '该服务下的 API 编码已存在' }, { status: 409 })
     const [created] = await db.insert(serviceApis).values({ id: randomUUID(), serviceId, ...parsed.value }).returning()
     await recordActivity({ actorId, action: 'service_api.created', resourceType: 'service_api', resourceId: created.id, detail: `${serviceId}:${created.code}` })
+    await invalidateServiceCatalog()
     return NextResponse.json({ api: created })
   }
   return NextResponse.json({ error: '未知操作' }, { status: 400 })
@@ -284,6 +287,7 @@ export async function PATCH(request: Request) {
     catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : '服务鉴权配置加密失败' }, { status: 503 }) }
     const [updated] = await db.update(apiServices).set({ ...parsed.value, authConfigEncrypted, updatedAt: new Date() }).where(eq(apiServices.id, serviceId)).returning()
     await recordActivity({ actorId, action: 'api_service.updated', resourceType: 'api_service', resourceId: updated.id, detail: `${updated.code} ${updated.name}` })
+    await invalidateServiceCatalog()
     return NextResponse.json({ service: serializeApiService(updated) })
   }
   if (body.type === 'service-api') {
@@ -296,6 +300,7 @@ export async function PATCH(request: Request) {
     const [updated] = await db.update(serviceApis).set({ ...parsed.value, updatedAt: new Date() }).where(and(eq(serviceApis.id, apiId), eq(serviceApis.serviceId, serviceId))).returning()
     if (!updated) return NextResponse.json({ error: 'API 不存在' }, { status: 404 })
     await recordActivity({ actorId, action: 'service_api.updated', resourceType: 'service_api', resourceId: updated.id, detail: `${serviceId}:${updated.code}` })
+    await invalidateServiceCatalog()
     return NextResponse.json({ api: updated })
   }
   if (body.type !== 'plan') return NextResponse.json({ error: '未知操作' }, { status: 400 })

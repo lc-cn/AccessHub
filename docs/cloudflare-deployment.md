@@ -48,6 +48,38 @@ Apply SQL files through `drizzle/0014_permissions.sql` to the existing PostgreSQ
 
 The first preview can use `DATABASE_URL` directly. For production, create a Hyperdrive configuration for the same database in the Cloudflare dashboard, uncomment the `HYPERDRIVE` block in `wrangler.jsonc`, and insert its configuration ID. AccessHub automatically prefers `HYPERDRIVE.connectionString` when the binding exists and falls back to `DATABASE_URL` otherwise.
 
+AccessHub keeps PostgreSQL as its source of truth and uses a cache-disabled Hyperdrive configuration for every authoritative read and write. Authentication, permissions, API keys, billing balances, gateway allowance checks, and administrator settings all require read-after-write consistency. Hyperdrive does not invalidate a cached `SELECT` after a write, so SQL query caching must remain disabled on this binding.
+
+```bash
+# Create the strong-consistency database configuration
+pnpm exec wrangler hyperdrive create accesshub-db \
+  --connection-string="<DATABASE_CONNECTION_STRING>" \
+  --caching-disabled
+
+# Or convert an existing configuration
+pnpm exec wrangler hyperdrive update <HYPERDRIVE_CONFIG_ID> \
+  --caching-disabled
+
+# Verify that `caching.disabled` is true
+pnpm exec wrangler hyperdrive get <HYPERDRIVE_CONFIG_ID>
+```
+
+Cache-tolerant read models use Workers KV through an explicit cache-aside layer. Create a namespace and bind it separately:
+
+```bash
+pnpm exec wrangler kv namespace create ACCESSHUB_CACHE
+```
+
+```jsonc
+"kv_namespaces": [
+  { "binding": "ACCESSHUB_CACHE", "id": "<KV_NAMESPACE_ID>" }
+]
+```
+
+The initial cached read model is the authenticated user-facing service/API catalog. Permission resolution remains a fresh database read, and the gateway always revalidates permissions and allowance against PostgreSQL. Administrator service and API mutations invalidate the catalog key after the database write. KV failures fall back to PostgreSQL and never block a successful command.
+
+Workers KV is eventually consistent, so cached catalogs may briefly show old descriptive data in another region after invalidation. Do not store sessions, API keys, entitlements, balances, usage, redemption state, webhook idempotency, administrator detail responses, or service credentials in KV. HTTP `Cache-Control` headers do not control Hyperdrive's SQL query cache or Workers KV.
+
 ## 4. Declare private upstream Workers
 
 Service Bindings are deployment configuration, so a database row alone cannot create one. Add every private upstream to `wrangler.jsonc`:

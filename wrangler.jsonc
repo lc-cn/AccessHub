@@ -55,5 +55,11 @@
       "binding": "HYPERDRIVE",
       "id": "487a5b5e88ad40a4b004cb9bda19808d"
     }
+  ],
+  "kv_namespaces": [
+    {
+      "binding": "ACCESSHUB_CACHE",
+      "id": "6cda39c09faa473381d34b81bdfcee04"
+    }
   ]
 }

@@ -2,7 +2,12 @@ import { env } from 'cloudflare:workers'
 
 type ServiceBinding = { fetch(request: Request): Promise<Response> }
 type HyperdriveBinding = { connectionString: string }
-type RuntimeBindings = Record<string, unknown> & { HYPERDRIVE?: HyperdriveBinding }
+export type CacheNamespace = {
+  get(key: string, options?: { type?: 'text'; cacheTtl?: number }): Promise<string | null>
+  put(key: string, value: string, options?: { expirationTtl?: number }): Promise<void>
+  delete(key: string): Promise<void>
+}
+type RuntimeBindings = Record<string, unknown> & { HYPERDRIVE?: HyperdriveBinding; ACCESSHUB_CACHE?: CacheNamespace }
 
 const bindings = env as unknown as RuntimeBindings
 
@@ -14,4 +19,8 @@ export function getServiceBinding(name: string): ServiceBinding | null {
 
 export function getHyperdriveConnectionString(): string | null {
   return bindings.HYPERDRIVE?.connectionString || null
+}
+
+export function getReadModelCache(): CacheNamespace | null {
+  return bindings.ACCESSHUB_CACHE || null
 }
