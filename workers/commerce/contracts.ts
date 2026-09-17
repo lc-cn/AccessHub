@@ -26,6 +26,7 @@ export type CommerceCommand =
   | { type: 'subscription.period.reconcile'; subscriptionId: string; expectedPeriodEnd: string }
   | { type: 'outbox.dispatch'; scheduledAt: string }
   | { type: 'subscriptions.reconcile_due'; scheduledAt: string }
+  | { type: 'dead-letter.record'; queueName: string; messageId: string; payload: Record<string, unknown>; deliveryAttempts: number; failedAt: string; replayable: boolean }
 
 export type CommerceCommandResult = {
   ok: true

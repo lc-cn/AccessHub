@@ -11,7 +11,15 @@
   },
   "observability": {
     "enabled": true,
-    "head_sampling_rate": 1
+    "redact_query_string": true,
+    "logs": {
+      "enabled": true,
+      "head_sampling_rate": 1
+    },
+    "traces": {
+      "enabled": true,
+      "head_sampling_rate": 0.1
+    }
   },
   "secrets": {
     "required": ["COMMERCE_INTERNAL_SECRET"]
@@ -29,6 +37,14 @@
         "retry_delay": 30,
         "dead_letter_queue": "accesshub-commerce-events-dlq",
         "max_concurrency": 5
+      },
+      {
+        "queue": "accesshub-commerce-events-dlq",
+        "max_batch_size": 10,
+        "max_batch_timeout": 5,
+        "max_retries": 10,
+        "retry_delay": 60,
+        "max_concurrency": 2
       }
     ]
   },

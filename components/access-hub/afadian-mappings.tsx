@@ -28,7 +28,7 @@ export function AfdianMappings({ skus, mode, mappingId }: Props) {
   const [notice, setNotice] = useState<{ tone: 'success' | 'error'; text: string } | null>(null)
   const load = useCallback(async () => {
     setLoading(true)
-    try { const result = await requestJson<AdminData>('/api/admin?section=afdian', { cache: 'no-store' }); setMappings(result.afdianMappings ?? []); setCatalog(result.skus ?? []); setWebhookConfigured(Boolean(result.afadianWebhookConfigured)); setMessengerConfigured(Boolean(result.afadianMessengerConfigured)) }
+    try { const result = await requestJson<AdminData>('/api/admin/afdian-mappings', { cache: 'no-store' }); setMappings(result.afdianMappings ?? []); setCatalog(result.skus ?? []); setWebhookConfigured(Boolean(result.afadianWebhookConfigured)); setMessengerConfigured(Boolean(result.afadianMessengerConfigured)) }
     catch (error) { setNotice({ tone: 'error', text: error instanceof Error ? error.message : '读取爱发电映射失败' }) }
     finally { setLoading(false) }
   }, [])
@@ -48,7 +48,7 @@ export function AfdianMappings({ skus, mode, mappingId }: Props) {
     if (!form.skuId) return setNotice({ tone: 'error', text: '请选择本地 SKU' })
     setSaving(true)
     try {
-      const result = await requestJson<{ mapping: AfdianMapping }>('/api/admin', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ type: 'afadian-mapping', externalOfferType: form.sourceType, externalOfferId: form.sourceId.trim(), name: form.name, skuId: form.skuId, codesPerItem: form.codesPerItem, enabled: form.enabled }) })
+      const result = await requestJson<{ mapping: AfdianMapping }>('/api/admin/afdian-mappings', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ externalOfferType: form.sourceType, externalOfferId: form.sourceId.trim(), name: form.name, skuId: form.skuId, codesPerItem: form.codesPerItem, enabled: form.enabled }) })
       setNotice({ tone: 'success', text: selected ? '映射已更新' : '映射已创建' }); await load()
       if (mode === 'new') router.replace(`/admin/afdian/mappings/${result.mapping.id}`)
     } catch (error) { setNotice({ tone: 'error', text: error instanceof Error ? error.message : '保存映射失败' }) }
@@ -56,7 +56,7 @@ export function AfdianMappings({ skus, mode, mappingId }: Props) {
   }
   const remove = async (mapping: AfdianMapping) => {
     if (deletingId !== mapping.id) return setDeletingId(mapping.id)
-    try { await requestJson(`/api/admin?mappingId=${encodeURIComponent(mapping.id)}`, { method: 'DELETE' }); await load() }
+    try { await requestJson(`/api/admin/afdian-mappings/${encodeURIComponent(mapping.id)}`, { method: 'DELETE' }); await load() }
     catch (error) { setNotice({ tone: 'error', text: error instanceof Error ? error.message : '删除映射失败' }) }
     finally { setDeletingId(null) }
   }

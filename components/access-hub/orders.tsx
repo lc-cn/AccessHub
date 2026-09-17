@@ -16,10 +16,11 @@ export function Orders({ mode, orderId, provider = 'all' }: { mode: 'list' | 'de
   const [error, setError] = useState('')
   const [query, setQuery] = useState('')
   const [copied, setCopied] = useState('')
+  const [reconciling, setReconciling] = useState<'confirmed_sent' | 'confirmed_not_sent' | ''>('')
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const data = await requestJson<AdminData>(`/api/admin?section=${provider === 'afdian' ? 'afdian-orders' : 'orders'}`, { cache: 'no-store' })
+      const data = await requestJson<AdminData>(`/api/admin/${provider === 'afdian' ? 'afdian-orders' : 'orders'}`, { cache: 'no-store' })
       setOrders(data.orders ?? [])
       setError('')
     } catch (reason) {
@@ -38,6 +39,23 @@ export function Orders({ mode, orderId, provider = 'all' }: { mode: 'list' | 'de
     await navigator.clipboard.writeText(value)
     setCopied(value)
     setTimeout(() => setCopied(''), 1400)
+  }
+  const reconcileDelivery = async (decision: 'confirmed_sent' | 'confirmed_not_sent') => {
+    if (!selected) return
+    if (decision === 'confirmed_not_sent' && !window.confirm('仅在爱发电侧确认上一条私信没有送达时重试。继续发送？')) return
+    setReconciling(decision); setError('')
+    try {
+      await requestJson(`/api/admin/orders/${encodeURIComponent(selected.id)}/delivery`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ decision }),
+      })
+      await load()
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : '私信核对失败')
+    } finally {
+      setReconciling('')
+    }
   }
   const basePath = provider === 'afdian' ? '/admin/afdian/orders' : '/admin/orders'
   const title = provider === 'afdian' ? '爱发电订单' : '全部订单'
@@ -60,6 +78,7 @@ export function Orders({ mode, orderId, provider = 'all' }: { mode: 'list' | 'de
           <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between"><div><p className="text-xs font-medium text-[#3157d5]">异步履约</p><h3 id="fulfillment-timeline-title" className="mt-1 font-semibold">订单处理时间线</h3></div>{selected.providerEvent?.workflowInstanceId && <code className="max-w-full truncate text-[10px] tabular-nums text-slate-400" title={selected.providerEvent.workflowInstanceId}>Workflow {selected.providerEvent.workflowInstanceId}</code>}</div>
           <FulfillmentTimeline order={selected}/>
           <LifecycleNotice order={selected} lifecycle={lifecycle}/>
+          {lifecycle === 'unknown' && <div className="mt-3 flex flex-col gap-2 rounded-xl border border-amber-200 bg-white p-3 sm:flex-row sm:items-center sm:justify-between"><p className="text-[11px] leading-5 text-slate-500">请先在爱发电私信记录中核对结果，再选择唯一符合事实的操作。</p><div className="flex shrink-0 flex-wrap gap-2"><button disabled={Boolean(reconciling)} onClick={() => void reconcileDelivery('confirmed_sent')} className="rounded-lg border border-emerald-200 px-3 py-2 text-xs font-medium text-emerald-700 disabled:opacity-50">{reconciling === 'confirmed_sent' ? '记录中…' : '确认已送达'}</button><button disabled={Boolean(reconciling)} onClick={() => void reconcileDelivery('confirmed_not_sent')} className="rounded-lg bg-amber-700 px-3 py-2 text-xs font-medium text-white disabled:opacity-50">{reconciling === 'confirmed_not_sent' ? '重试中…' : '确认未送达并重试'}</button></div></div>}
         </section>
 
         <section className="px-6 py-7 sm:px-8" aria-labelledby="order-codes-title">

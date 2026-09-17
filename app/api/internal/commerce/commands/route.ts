@@ -8,6 +8,7 @@ import {
   reconcileSubscriptionPeriod,
 } from '@/lib/commerce-orchestration'
 import { expireDueSubscriptions } from '@/lib/subscription-service'
+import { recordCommerceDeadLetter } from '@/lib/commerce-operations'
 
 type CommerceCommand =
   | { type: 'order.fulfill'; providerEventId: string }
@@ -15,6 +16,7 @@ type CommerceCommand =
   | { type: 'subscription.period.reconcile'; subscriptionId: string; expectedPeriodEnd: string }
   | { type: 'subscriptions.reconcile_due'; scheduledAt: string }
   | { type: 'outbox.dispatch'; scheduledAt: string }
+  | { type: 'dead-letter.record'; queueName: string; messageId: string; payload: Record<string, unknown>; deliveryAttempts: number; failedAt: string; replayable: boolean }
 
 function safeEqual(actual: string, expected: string) {
   const actualBuffer = Buffer.from(actual)
@@ -34,6 +36,10 @@ function isNonEmptyString(value: unknown): value is string {
   return typeof value === 'string' && value.trim().length > 0
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
 function parseCommand(value: unknown): CommerceCommand | null {
   if (!value || typeof value !== 'object') return null
   const body = value as Record<string, unknown>
@@ -44,6 +50,9 @@ function parseCommand(value: unknown): CommerceCommand | null {
   }
   if ((body.type === 'subscriptions.reconcile_due' || body.type === 'outbox.dispatch') && isNonEmptyString(body.scheduledAt)) {
     return { type: body.type, scheduledAt: body.scheduledAt }
+  }
+  if (body.type === 'dead-letter.record' && isNonEmptyString(body.queueName) && isNonEmptyString(body.messageId) && isRecord(body.payload) && isNonEmptyString(body.failedAt) && typeof body.deliveryAttempts === 'number' && typeof body.replayable === 'boolean') {
+    return { type: body.type, queueName: body.queueName, messageId: body.messageId, payload: body.payload, deliveryAttempts: body.deliveryAttempts, failedAt: body.failedAt, replayable: body.replayable }
   }
   return null
 }
@@ -74,6 +83,10 @@ export async function POST(request: Request) {
     if (command.type === 'outbox.dispatch') {
       const result = await dispatchPendingCommerceEvents()
       return success('dispatched', result)
+    }
+    if (command.type === 'dead-letter.record') {
+      const result = await recordCommerceDeadLetter(command)
+      return success(result.duplicate ? 'already_recorded' : 'recorded', result)
     }
     return success('reconciled', { expired: await expireDueSubscriptions(new Date(command.scheduledAt)) })
   } catch (error) {

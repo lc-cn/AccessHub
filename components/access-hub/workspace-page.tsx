@@ -6,6 +6,7 @@ import { AfdianMappings } from './afadian-mappings'
 import { ApiKeyManagement } from './api-key-management'
 import { CommerceResources } from './commerce-resources'
 import { Orders } from './orders'
+import { Operations } from './operations'
 import { Permissions } from './permissions'
 import { Skus } from './skus'
 import { Services } from './services'
@@ -63,6 +64,7 @@ function RouteContent({ route, resourceId, dashboard, loading, copied, refresh, 
   if (route === 'permissions' || route === 'permissions-new' || route === 'permissions-edit') return <Permissions mode={route === 'permissions' ? 'list' : route === 'permissions-new' ? 'new' : 'edit'} permissionId={resourceId}/>
   if (route === 'subscriptions' || route === 'payments' || route === 'users' || route === 'logs' || route === 'afdian-events') return <CommerceResources resource={route}/>
   if (route === 'orders' || route === 'order-detail') return <Orders mode={route === 'orders' ? 'list' : 'detail'} orderId={resourceId}/>
+  if (route === 'operations') return <Operations/>
   if (route === 'afdian' || route === 'afdian-new' || route === 'afdian-edit') return <AfdianMappings skus={skus} mode={route === 'afdian' ? 'list' : route === 'afdian-new' ? 'new' : 'edit'} mappingId={resourceId}/>
   if (route === 'afdian-orders' || route === 'afdian-order-detail') return <Orders provider="afdian" mode={route === 'afdian-orders' ? 'list' : 'detail'} orderId={resourceId}/>
   return null

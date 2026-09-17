@@ -47,7 +47,7 @@ On Cloudflare, a Mailjet SMTP configuration is sent through Mailjet Send API v3.
 
 ## 3. Apply the database migration
 
-Apply SQL files through `drizzle/0015_commerce_orchestration.sql` to the existing PostgreSQL database before deploying the asynchronous commerce worker. Existing services are retained as `http` transports, and existing services remain open to all authenticated users until a required permission is selected.
+Apply SQL files through `drizzle/0019_commerce_dead_letters.sql` to the existing PostgreSQL database before deploying the asynchronous commerce worker. Audit and stage the `0018` integrity constraints according to [database-integrity.md](database-integrity.md); it intentionally is not part of an unattended deploy. Existing services are retained as `http` transports, and existing services remain open to all authenticated users until a required permission is selected.
 
 The first preview can use `DATABASE_URL` directly. For production, create a Hyperdrive configuration for the same database in the Cloudflare dashboard, uncomment the `HYPERDRIVE` block in `wrangler.jsonc`, and insert its configuration ID. AccessHub automatically prefers `HYPERDRIVE.connectionString` when the binding exists and falls back to `DATABASE_URL` otherwise.
 
@@ -112,6 +112,8 @@ The main `accesshub` Worker is only a Queue producer. The commerce Worker is the
 
 Queue and Workflow delivery are at-least-once. Database uniqueness constraints and deterministic Workflow IDs make order creation idempotent. A private-message timeout is recorded as `unknown` and is not blindly retried.
 
+The Commerce Worker also consumes `accesshub-commerce-events-dlq` and persists each dead letter before acknowledging it. Administrators inspect and replay validated messages at `/admin/operations`; malformed payloads remain visible but are not replayable.
+
 ## 5. Declare private upstream Workers
 
 Service Bindings are deployment configuration, so a database row alone cannot create one. Add every private upstream to `wrangler.jsonc`:
@@ -152,7 +154,7 @@ Validate these paths on the `workers.dev` preview URL:
 3. One free API and one billable API through both HTTP and Worker Binding transports.
 4. Upstream timeout/non-200 behavior and the rule that only HTTP 200 consumes usage.
 5. Redeem-code fulfillment, Afdian webhook idempotency, Queue/Workflow progress, DLQ behavior, and private-message delivery.
-6. Password reset and verification email. Workers blocks outbound TCP port 25; use SMTP 465 or 587 and verify the provider accepts Worker-originated connections.
+6. Password reset and verification email through the configured HTTPS email transport (Mailjet in the current Cloudflare adapter).
 
 ## 7. Cut over the production domain
 
@@ -164,4 +166,4 @@ After preview acceptance:
 4. Update the Afdian order webhook URL and run a real low-value fulfillment test.
 5. Move DNS traffic, monitor Worker logs and PostgreSQL connections, then retire the Vercel deployment only after a rollback window.
 
-The application still includes Vercel Analytics for migration compatibility. It is not part of the Cloudflare transport path; replace it with Cloudflare Web Analytics after cutover if production analytics are required.
+Production CI/CD and incident handling are documented in [operations-runbook.md](operations-runbook.md). The application still includes Vercel Analytics for migration compatibility. It is not part of the Cloudflare transport path; replace it with Cloudflare Web Analytics after cutover if production analytics are required.

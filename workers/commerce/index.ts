@@ -1,7 +1,12 @@
 import type { CommerceEnv } from './env.ts'
 import { executeCommerceCommand } from './internal-command.ts'
 import { errorMessage, log } from './logging.ts'
-import { cloudflareWorkflowStarter, consumeCommerceBatch } from './queue.ts'
+import {
+  cloudflareDeadLetterRecorder,
+  cloudflareWorkflowStarter,
+  consumeCommerceBatch,
+  consumeCommerceDeadLetterBatch,
+} from './queue.ts'
 
 export { OrderFulfillmentWorkflow, SubscriptionPeriodWorkflow } from './workflows.ts'
 
@@ -11,6 +16,10 @@ export default {
   },
 
   async queue(batch, env): Promise<void> {
+    if (batch.queue === 'accesshub-commerce-events-dlq') {
+      await consumeCommerceDeadLetterBatch(batch, cloudflareDeadLetterRecorder(env))
+      return
+    }
     await consumeCommerceBatch(batch, cloudflareWorkflowStarter(env))
   },
 

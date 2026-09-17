@@ -24,23 +24,23 @@ Open [http://localhost:3000](http://localhost:3000) with your browser to see the
 
 The application expects `DATABASE_URL`, `BETTER_AUTH_SECRET`, `GITHUB_CLIENT_ID`, and `GITHUB_CLIENT_SECRET`. Set `NEXT_PUBLIC_AFDIAN_URL` to the creator page used by the generic upgrade call to action.
 
-API service credentials are encrypted at rest with `SERVICE_CREDENTIALS_KEY`. Generate a dedicated random value locally and configure the same value in every runtime environment; rotating it invalidates existing encrypted upstream credentials. Do not commit it:
+API service credentials are encrypted at rest with `SERVICE_CREDENTIALS_KEY`. Generate a dedicated random value locally and configure the same value in every runtime environment; rotating it invalidates existing encrypted upstream credentials. Do not commit it. For Cloudflare, enter it through Wrangler's interactive prompt:
 
 ```bash
-openssl rand -base64 48 | vercel env add SERVICE_CREDENTIALS_KEY production --sensitive
+pnpm exec wrangler secret put SERVICE_CREDENTIALS_KEY --config dist/server/wrangler.json
 ```
 
 Administrators define upstream services under `/admin/services`, then publish endpoints at `/api/gateway/<service-code>/<api-code>`. Upstream authentication supports Bearer, custom Header, Query parameter, and Basic Auth. The gateway validates the configured parameter allow-list, reserves the endpoint's configured usage units, injects upstream authentication server-side, and does not follow upstream redirects.
 
 Services can use either a public HTTP origin or a private Cloudflare Worker Service Binding. Worker Binding services avoid public DNS and network transit, while preserving the same API contract, authentication injection, allowance checks, and success-only billing behavior. See [docs/cloudflare-deployment.md](docs/cloudflare-deployment.md) for deployment, Hyperdrive, binding, and cutover instructions.
 
-Users receive a system-managed default API key and can create additional scoped keys under `/api-keys` in My Workspace. Custom keys are returned once and stored only as SHA-256 hashes. The default key is encrypted at rest so the browser Test Console can retrieve it for authenticated test calls. Programmatic clients call the gateway with:
+Users receive a system-managed default API key and can create additional keys under `/api-keys` in My Workspace. Custom keys are returned once and stored only as SHA-256 hashes. The default key is encrypted at rest so the browser Test Console can retrieve it for authenticated test calls. API keys identify the user; service access is decided only by the user's current permissions, with no second service-scope system. Programmatic clients call the gateway with:
 
 ```text
 Authorization: Bearer ahk_...
 ```
 
-API keys may be limited to selected services and can be revoked immediately. Browser-based testing under `/services` retrieves the signed-in user's default key and calls the same Bearer-authenticated gateway used by external clients. Billable units are committed only when the upstream responds with HTTP 200; network failures, timeouts, and non-200 responses do not consume quota.
+API keys can be revoked immediately. Browser-based testing under `/services` retrieves the signed-in user's default key and calls the same Bearer-authenticated gateway used by external clients. Billable units are committed only when the upstream responds with HTTP 200; network failures, timeouts, and non-200 responses do not consume quota.
 
 Email/password authentication is enabled only when SMTP delivery is completely configured. Set `SMTP_HOST`, `SMTP_FROM`, and, when authentication is required, both `SMTP_USER` and `SMTP_PASS`. Optional settings are `SMTP_PORT` (default `587`), `SMTP_SECURE` (default `false`), and `FRESH_SESSION_MAX_AGE_MINUTES` (default `15`). See [docs/smtp-deployment.md](docs/smtp-deployment.md) for deployment behavior; do not commit secret values.
 
@@ -70,7 +70,7 @@ Set `AFDIAN_WEBHOOK_SECRET` to a long random value and redact the webhook query 
 
 Create the local SKU first, then connect the Afdian plan or Afdian SKU under `/admin/afdian/mappings`. Afdian SKU mappings take precedence over Afdian plan mappings. An enabled plan mapping also turns the corresponding dashboard plan card into a direct Afdian checkout link.
 
-The webhook accepts paid orders only and uses the pair `(provider, out_trade_no)` as its idempotency key. It durably records the callback, writes a transactional Outbox event, and returns after publishing to Cloudflare Queue. The separate Commerce Worker starts deterministic order Workflows that generate `AFD-...` codes and deliver the Afdian private message. Each plan code owns an independent pending subscription; its effective period starts only when that code is redeemed, at which point a subscription-period Workflow is scheduled. The buyer is notified through `/api/open/send-msg`, using `data.order.user_id` as `recipient`. `/admin/afdian/orders` shows the PSP-specific order view and its Webhook → Queue → Workflow → fulfillment timeline, while `/admin/orders`, `/admin/payments`, and `/admin/subscriptions` show provider-independent commerce state. Definite message failures may retry; unknown delivery outcomes are held for manual reconciliation to avoid duplicate messages.
+The webhook accepts paid orders only and uses the pair `(provider, out_trade_no)` as its idempotency key. It durably records the callback, writes a transactional Outbox event, and returns after publishing to Cloudflare Queue. The separate Commerce Worker starts deterministic order Workflows that generate `AFD-...` codes and deliver the Afdian private message. Each plan code owns an independent pending subscription; its effective period starts only when that code is redeemed, at which point a subscription-period Workflow is scheduled. The buyer is notified through `/api/open/send-msg`, using `data.order.user_id` as `recipient`. `/admin/afdian/orders` shows the PSP-specific order view and its Webhook → Queue → Workflow → fulfillment timeline, while `/admin/orders`, `/admin/payments`, and `/admin/subscriptions` show provider-independent commerce state. Definite message failures may retry; unknown delivery outcomes are held for manual reconciliation to avoid duplicate messages. Queue dead letters are persisted in PostgreSQL and can be inspected and explicitly replayed from `/admin/operations`.
 
 Apply SQL files in `drizzle/` to the PostgreSQL database before deploying schema-dependent changes.
 
@@ -79,7 +79,7 @@ Apply SQL files in `drizzle/` to the PostgreSQL database before deploying schema
 The console uses path-based routes rather than query-string views:
 
 - `/dashboard`, `/services`, `/api-keys`, and `/redeem-codes` are regular user pages.
-- `/admin/services`, `/admin/plans`, `/admin/skus`, `/admin/redeem-codes`, `/admin/subscriptions`, `/admin/orders`, `/admin/payments`, `/admin/users`, and `/admin/logs` are provider-independent administrator pages.
+- `/admin/services`, `/admin/plans`, `/admin/skus`, `/admin/redeem-codes`, `/admin/subscriptions`, `/admin/orders`, `/admin/payments`, `/admin/users`, `/admin/operations`, and `/admin/logs` are provider-independent administrator pages.
 - `/admin/afdian/mappings`, `/admin/afdian/orders`, and `/admin/afdian/events` are the Afdian PSP adapter pages.
 - New resources use `/new`; editable resources use `/{id}`.
 

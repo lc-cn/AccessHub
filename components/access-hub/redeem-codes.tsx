@@ -36,7 +36,7 @@ export function RedeemCodes({ authenticated, isAdmin, skus, onChanged, onSignIn,
     if (!isAdmin || mode === 'redeem') return
     setAdminLoading(true)
     try {
-      const data = await requestJson<AdminData>('/api/admin?section=codes', { cache: 'no-store' })
+      const data = await requestJson<AdminData>('/api/admin/redeem-codes', { cache: 'no-store' })
       setAdminData(data)
       setGenerator((current) => ({ ...current, skuId: current.skuId || data.skus.find((sku) => sku.active)?.id || '' }))
       setAdminError('')
@@ -63,7 +63,7 @@ export function RedeemCodes({ authenticated, isAdmin, skus, onChanged, onSignIn,
     if (!generator.skuId) return setAdminError('请先选择 SKU')
     setGenerating(true); setGenerated([])
     try {
-      const result = await requestJson<{ codes: string[] }>('/api/admin', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ type: 'codes', ...generator }) })
+      const result = await requestJson<{ codes: string[] }>('/api/admin/redeem-codes', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(generator) })
       setGenerated(result.codes); setAdminError(''); await Promise.all([loadAdmin(), onChanged()])
     } catch (error) { setAdminError(error instanceof Error ? error.message : '生成失败，请检查配置') }
     finally { setGenerating(false) }

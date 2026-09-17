@@ -25,7 +25,7 @@ export function SubscriptionPlanManagement({ plans, mode, planId, onChanged }: P
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const data = await requestJson<AdminData>('/api/admin?section=plans', { cache: 'no-store' })
+      const data = await requestJson<AdminData>('/api/admin/plans', { cache: 'no-store' })
       setAdminPlans(data.plans)
     } catch (error) { setNotice({ tone: 'error', text: error instanceof Error ? error.message : '订阅计划读取失败' }) }
     finally { setLoading(false) }
@@ -50,7 +50,7 @@ export function SubscriptionPlanManagement({ plans, mode, planId, onChanged }: P
     setSaving(true)
     setNotice(null)
     try {
-      const result = await requestJson<{ plan: AdminPlan }>('/api/admin', { method: mode === 'new' ? 'POST' : 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ type: 'plan', planId, ...form }) })
+      const result = await requestJson<{ plan: AdminPlan }>(mode === 'new' ? '/api/admin/plans' : `/api/admin/plans/${encodeURIComponent(planId || '')}`, { method: mode === 'new' ? 'POST' : 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify(form) })
       await Promise.all([load(), onChanged()])
       if (mode === 'new') router.replace(`/admin/plans/${result.plan.id}`)
       else { setForm(formFor(result.plan)); setNotice({ tone: 'success', text: '策略已保存' }) }

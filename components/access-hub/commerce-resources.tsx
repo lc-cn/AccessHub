@@ -21,7 +21,7 @@ export function CommerceResources({ resource }: { resource: Resource }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [updatingId, setUpdatingId] = useState<string | null>(null)
-  const load = useCallback(async () => { setLoading(true); try { setData(await requestJson<AdminData>(`/api/admin?section=${resource}`, { cache: 'no-store' })); setError('') } catch (reason) { setError(reason instanceof Error ? reason.message : '读取失败') } finally { setLoading(false) } }, [resource])
+  const load = useCallback(async () => { setLoading(true); try { setData(await requestJson<AdminData>(`/api/admin/${resource}`, { cache: 'no-store' })); setError('') } catch (reason) { setError(reason instanceof Error ? reason.message : '读取失败') } finally { setLoading(false) } }, [resource])
   useEffect(() => { void load() }, [load])
   useWorkspaceRefresh(load)
   const config = meta[resource]
@@ -33,7 +33,7 @@ export function CommerceResources({ resource }: { resource: Resource }) {
   const transition = async (subscriptionId: string, status: Subscription['status']) => {
     setUpdatingId(subscriptionId)
     try {
-      await requestJson('/api/admin', { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ type: 'subscription', subscriptionId, status }) })
+      await requestJson(`/api/admin/subscriptions/${encodeURIComponent(subscriptionId)}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ status }) })
       await load()
     } catch (reason) { setError(reason instanceof Error ? reason.message : '订阅状态更新失败') }
     finally { setUpdatingId(null) }

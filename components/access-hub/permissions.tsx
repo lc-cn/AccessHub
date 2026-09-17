@@ -26,7 +26,7 @@ export function Permissions({ mode, permissionId }: { mode: Mode; permissionId?:
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const data = await requestJson<AdminData>('/api/admin?section=permissions', { cache: 'no-store' })
+      const data = await requestJson<AdminData>('/api/admin/permissions', { cache: 'no-store' })
       setItems(data.permissions ?? []); setPlans(data.plans ?? []); setNotice(null)
     } catch (error) { setNotice({ tone: 'error', text: error instanceof Error ? error.message : '权限目录读取失败' }) }
     finally { setLoading(false) }
@@ -40,7 +40,7 @@ export function Permissions({ mode, permissionId }: { mode: Mode; permissionId?:
   const save = async () => {
     setSaving(true); setNotice(null)
     try {
-      const result = await requestJson<{ permission: Permission }>('/api/admin', { method: mode === 'new' ? 'POST' : 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ type: 'permission', permissionId, ...form }) })
+      const result = await requestJson<{ permission: Permission }>(mode === 'new' ? '/api/admin/permissions' : `/api/admin/permissions/${encodeURIComponent(permissionId || '')}`, { method: mode === 'new' ? 'POST' : 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify(form) })
       await load()
       if (mode === 'new') router.replace(`/admin/permissions/${result.permission.id}`)
       else { setForm(formFor(result.permission)); setNotice({ tone: 'success', text: '权限及计划授权已保存' }) }

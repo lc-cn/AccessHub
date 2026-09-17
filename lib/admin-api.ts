@@ -1,8 +1,7 @@
 import { randomBytes, randomUUID } from 'node:crypto'
-import { headers } from 'next/headers'
 import { NextResponse } from 'next/server'
 import { and, asc, desc, eq, inArray, not, sql } from 'drizzle-orm'
-import { auth } from '@/lib/auth'
+import { requireAdminActor } from '@/lib/admin-auth'
 import { recordActivity } from '@/lib/activity-log'
 import { parseBenefitInput, parseSubscriptionPlanPolicyInput } from '@/lib/admin-entitlements'
 import { db, withRequestDatabase } from '@/lib/db'
@@ -15,26 +14,14 @@ import { hasWorkerServiceBinding, workerServiceBindings } from '@/lib/worker-ser
 import { parsePermissionInput } from '@/lib/permissions'
 import { invalidateServiceCatalog } from '@/lib/read-model-cache'
 
-async function requireAdmin() {
-  const session = await auth.api.getSession({ headers: await headers() })
-  if (!session?.user) return null
-  const [admin] = await db.select({ role: user.role }).from(user).where(eq(user.id, session.user.id)).limit(1)
-  if (admin?.role === 'admin') return session.user.id
-  const [existingAdmin] = await db.select({ id: user.id }).from(user).where(eq(user.role, 'admin')).limit(1)
-  if (!existingAdmin) {
-    await db.update(user).set({ role: 'admin' }).where(eq(user.id, session.user.id))
-    return session.user.id
-  }
-  return null
-}
-
+// Internal handlers shared by the resource-oriented administrator routes.
 function serializeApiService<T extends { authType: string; authConfigEncrypted: string | null }>(service: T) {
   const { authConfigEncrypted, ...publicService } = service
   return { ...publicService, ...presentServiceAuth(service.authType as ServiceAuthType, authConfigEncrypted) }
 }
 
 export async function GET(request: Request) {
-  if (!(await requireAdmin())) return NextResponse.json({ error: '无权访问' }, { status: 403 })
+  if (!(await requireAdminActor())) return NextResponse.json({ error: '无权访问' }, { status: 403 })
   return withRequestDatabase(async (db) => {
     const section = new URL(request.url).searchParams.get('section') || 'all'
     const wants = (...names: string[]) => section === 'all' || names.includes(section)
@@ -116,7 +103,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const actorId = await requireAdmin()
+  const actorId = await requireAdminActor()
   if (!actorId) return NextResponse.json({ error: '无权操作' }, { status: 403 })
   const body = await request.json().catch(() => ({}))
   if (body.type === 'permission') {
@@ -145,9 +132,14 @@ export async function POST(request: Request) {
     if (sameName) return NextResponse.json({ error: '订阅计划名称已存在' }, { status: 409 })
     const [sameRank] = await db.select({ id: subscriptionPlans.id }).from(subscriptionPlans).where(eq(subscriptionPlans.rank, policy.rank)).limit(1)
     if (sameRank) return NextResponse.json({ error: '计划阶梯等级已被占用' }, { status: 409 })
-    const [existingPlan] = await db.select({ id: subscriptionPlans.id }).from(subscriptionPlans).limit(1)
-    const [created] = await db.insert(subscriptionPlans).values({ id: randomUUID(), name, ...policy, isDefault: policy.isDefault || !existingPlan }).returning()
-    if (created.isDefault) await db.update(subscriptionPlans).set({ isDefault: false }).where(and(eq(subscriptionPlans.isDefault, true), not(eq(subscriptionPlans.id, created.id))))
+    const created = await db.transaction(async (tx) => {
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtext('subscription_plans.default'))`)
+      const [existingPlan] = await tx.select({ id: subscriptionPlans.id }).from(subscriptionPlans).limit(1)
+      const isDefault = policy.isDefault || !existingPlan
+      if (isDefault) await tx.update(subscriptionPlans).set({ isDefault: false }).where(eq(subscriptionPlans.isDefault, true))
+      const [inserted] = await tx.insert(subscriptionPlans).values({ id: randomUUID(), name, ...policy, isDefault }).returning()
+      return inserted
+    })
     await recordActivity({ actorId, action: 'plan.created', resourceType: 'subscription_plan', resourceId: created.id, detail: created.name })
     return NextResponse.json({ plan: created })
   }
@@ -231,7 +223,7 @@ export async function POST(request: Request) {
 }
 
 export async function PATCH(request: Request) {
-  const actorId = await requireAdmin()
+  const actorId = await requireAdminActor()
   if (!actorId) return NextResponse.json({ error: '无权操作' }, { status: 403 })
   const body = await request.json().catch(() => ({}))
   if (body.type === 'permission') {
@@ -334,14 +326,18 @@ export async function PATCH(request: Request) {
   if (sameName) return NextResponse.json({ error: '订阅计划名称已存在' }, { status: 409 })
   const [sameRank] = await db.select({ id: subscriptionPlans.id }).from(subscriptionPlans).where(and(eq(subscriptionPlans.rank, policy.rank), not(eq(subscriptionPlans.id, planId)))).limit(1)
   if (sameRank) return NextResponse.json({ error: '计划阶梯等级已被占用' }, { status: 409 })
-  if (body.isDefault) await db.update(subscriptionPlans).set({ isDefault: false }).where(and(eq(subscriptionPlans.isDefault, true), not(eq(subscriptionPlans.id, planId))))
-  const [updated] = await db.update(subscriptionPlans).set({ name, ...policy, isDefault: target.isDefault || policy.isDefault, updatedAt: new Date() }).where(eq(subscriptionPlans.id, planId)).returning()
+  const updated = await db.transaction(async (tx) => {
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtext('subscription_plans.default'))`)
+    if (body.isDefault) await tx.update(subscriptionPlans).set({ isDefault: false }).where(and(eq(subscriptionPlans.isDefault, true), not(eq(subscriptionPlans.id, planId))))
+    const [changed] = await tx.update(subscriptionPlans).set({ name, ...policy, isDefault: target.isDefault || policy.isDefault, updatedAt: new Date() }).where(eq(subscriptionPlans.id, planId)).returning()
+    return changed
+  })
   await recordActivity({ actorId, action: 'plan.updated', resourceType: 'subscription_plan', resourceId: updated.id, detail: updated.name })
   return NextResponse.json({ plan: updated })
 }
 
 export async function DELETE(request: Request) {
-  const actorId = await requireAdmin()
+  const actorId = await requireAdminActor()
   if (!actorId) return NextResponse.json({ error: '无权操作' }, { status: 403 })
   const mappingId = new URL(request.url).searchParams.get('mappingId')
   if (!mappingId) return NextResponse.json({ error: '缺少映射 ID' }, { status: 400 })

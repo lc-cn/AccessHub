@@ -20,7 +20,7 @@ export function Skus({ plans, mode, skuId }: { plans: DashboardPlan[]; mode: 'li
   const [saving, setSaving] = useState(false)
   const [query, setQuery] = useState('')
   const [notice, setNotice] = useState<{ tone: 'success' | 'error'; text: string } | null>(null)
-  const load = useCallback(async () => { setLoading(true); try { const data = await requestJson<AdminData>('/api/admin?section=skus', { cache: 'no-store' }); setItems(data.skus ?? []) } catch (error) { setNotice({ tone: 'error', text: error instanceof Error ? error.message : 'SKU 目录读取失败' }) } finally { setLoading(false) } }, [])
+  const load = useCallback(async () => { setLoading(true); try { const data = await requestJson<AdminData>('/api/admin/skus', { cache: 'no-store' }); setItems(data.skus ?? []) } catch (error) { setNotice({ tone: 'error', text: error instanceof Error ? error.message : 'SKU 目录读取失败' }) } finally { setLoading(false) } }, [])
   useEffect(() => { void load() }, [load])
   useWorkspaceRefresh(load)
   const selected = useMemo(() => items.find((item) => item.id === skuId) ?? null, [items, skuId])
@@ -31,7 +31,7 @@ export function Skus({ plans, mode, skuId }: { plans: DashboardPlan[]; mode: 'li
   const save = async () => {
     setSaving(true); setNotice(null)
     try {
-      const result = await requestJson<{ sku: Sku }>('/api/admin', { method: mode === 'new' ? 'POST' : 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ type: 'sku', skuId, ...form }) })
+      const result = await requestJson<{ sku: Sku }>(mode === 'new' ? '/api/admin/skus' : `/api/admin/skus/${encodeURIComponent(skuId || '')}`, { method: mode === 'new' ? 'POST' : 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify(form) })
       await load()
       if (mode === 'new') router.replace(`/admin/skus/${result.sku.id}`)
       else { setForm(formFor(result.sku, plans[0]?.id)); setNotice({ tone: 'success', text: 'SKU 已保存' }) }

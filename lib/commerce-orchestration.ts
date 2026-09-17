@@ -369,6 +369,90 @@ export async function deliverAfdianProviderEvent(providerEventId: string) {
   return { outcome: result.outcome, orderId: order.id, error: result.error }
 }
 
+export async function reconcileUnknownAfdianDelivery(input: {
+  orderId: string
+  actorId: string
+  decision: 'confirmed_sent' | 'confirmed_not_sent'
+}) {
+  const [target] = await db.select({
+    id: orders.id,
+    providerId: orders.providerId,
+    externalOrderId: orders.externalOrderId,
+    deliveryStatus: orders.deliveryStatus,
+    deliveredAt: orders.deliveredAt,
+    providerEventId: providerEvents.id,
+  }).from(orders).leftJoin(providerEvents, and(
+    eq(providerEvents.providerId, orders.providerId),
+    eq(providerEvents.externalEventId, orders.externalOrderId),
+  )).where(eq(orders.id, input.orderId)).limit(1)
+  if (!target) throw new CommerceCommandError('订单不存在', false)
+  if (target.providerId !== 'psp-afdian') throw new CommerceCommandError('该订单不支持爱发电私信核对', false)
+  if (target.deliveryStatus !== 'unknown') throw new CommerceCommandError('订单当前不需要人工核对', false)
+  if (!target.providerEventId) throw new CommerceCommandError('订单缺少关联的支付事件', false)
+
+  const decidedAt = new Date()
+  if (input.decision === 'confirmed_sent') {
+    await db.transaction(async (tx) => {
+      const [claimedOrder] = await tx.update(orders).set({
+        deliveryStatus: 'sent',
+        deliveredAt: target.deliveredAt ?? decidedAt,
+        deliveryLastError: null,
+        updatedAt: decidedAt,
+      }).where(and(eq(orders.id, target.id), eq(orders.deliveryStatus, 'unknown'))).returning({ id: orders.id })
+      if (!claimedOrder) throw new CommerceCommandError('订单已被其他操作处理，请刷新后重试', false)
+      await tx.update(externalEffectAttempts).set({
+        status: 'succeeded',
+        completedAt: decidedAt,
+        nextAttemptAt: null,
+        responsePayload: { outcome: 'sent', reconciledBy: input.actorId },
+        lastError: null,
+        updatedAt: decidedAt,
+      }).where(and(
+        eq(externalEffectAttempts.orderId, target.id),
+        eq(externalEffectAttempts.effectType, 'afdian.private_message'),
+      ))
+      await tx.insert(activityLogs).values({
+        id: randomUUID(),
+        actorId: input.actorId,
+        action: 'order.delivery_reconciled_sent',
+        resourceType: 'order',
+        resourceId: target.id,
+        detail: '管理员已在爱发电侧确认私信送达',
+      })
+    })
+    return { outcome: 'sent' as const, orderId: target.id }
+  }
+
+  await db.transaction(async (tx) => {
+    const [claimedOrder] = await tx.update(orders).set({
+      deliveryStatus: 'failed',
+      deliveryLastError: '管理员已确认上一次私信未送达，正在人工重试',
+      updatedAt: decidedAt,
+    }).where(and(eq(orders.id, target.id), eq(orders.deliveryStatus, 'unknown'))).returning({ id: orders.id })
+    if (!claimedOrder) throw new CommerceCommandError('订单已被其他操作处理，请刷新后重试', false)
+    await tx.update(externalEffectAttempts).set({
+      status: 'failed',
+      completedAt: decidedAt,
+      nextAttemptAt: decidedAt,
+      responsePayload: { outcome: 'failed', reconciledBy: input.actorId },
+      lastError: '管理员已确认上一次私信未送达',
+      updatedAt: decidedAt,
+    }).where(and(
+      eq(externalEffectAttempts.orderId, target.id),
+      eq(externalEffectAttempts.effectType, 'afdian.private_message'),
+    ))
+    await tx.insert(activityLogs).values({
+      id: randomUUID(),
+      actorId: input.actorId,
+      action: 'order.delivery_reconciled_retry',
+      resourceType: 'order',
+      resourceId: target.id,
+      detail: '管理员已确认上一次私信未送达并发起重试',
+    })
+  })
+  return deliverAfdianProviderEvent(target.providerEventId)
+}
+
 export async function reconcileSubscriptionPeriod(subscriptionId: string, expectedPeriodEnd: string) {
   const expected = new Date(expectedPeriodEnd)
   if (!Number.isFinite(expected.getTime())) throw new CommerceCommandError('invalid expectedPeriodEnd', false)

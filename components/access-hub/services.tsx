@@ -36,7 +36,7 @@ export function Services({ mode, resourceId }: { mode: Mode; resourceId?: string
 
   const load = useCallback(async () => {
     setLoading(true)
-    try { const data = await requestJson<AdminData>('/api/admin?section=services', { cache: 'no-store' }); setServices(data.services ?? []); setWorkerBindings(data.workerBindings ?? []); setPermissions(data.permissions ?? []); setNotice(null) }
+    try { const data = await requestJson<AdminData>('/api/admin/services', { cache: 'no-store' }); setServices(data.services ?? []); setWorkerBindings(data.workerBindings ?? []); setPermissions(data.permissions ?? []); setNotice(null) }
     catch (error) { setNotice({ tone: 'error', text: error instanceof Error ? error.message : '服务目录读取失败' }) }
     finally { setLoading(false) }
   }, [])
@@ -58,7 +58,7 @@ export function Services({ mode, resourceId }: { mode: Mode; resourceId?: string
   const saveService = async () => {
     setSaving(true); setNotice(null)
     try {
-      const result = await requestJson<{ service: ApiService }>('/api/admin', { method: mode === 'new' ? 'POST' : 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ type: 'service', serviceId, ...serviceForm }) })
+      const result = await requestJson<{ service: ApiService }>(mode === 'new' ? '/api/admin/services' : `/api/admin/services/${encodeURIComponent(serviceId || '')}`, { method: mode === 'new' ? 'POST' : 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify(serviceForm) })
       if (mode === 'new') {
         setServices((current) => [...current, result.service])
         router.replace(`/admin/services/${result.service.id}`)
@@ -75,7 +75,8 @@ export function Services({ mode, resourceId }: { mode: Mode; resourceId?: string
     if (!serviceId) return
     setSaving(true); setNotice(null)
     try {
-      const result = await requestJson<{ api: ServiceApi }>('/api/admin', { method: mode === 'api-new' ? 'POST' : 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ type: 'service-api', serviceId, apiId, ...apiForm }) })
+      const base = `/api/admin/services/${encodeURIComponent(serviceId || '')}/apis`
+      const result = await requestJson<{ api: ServiceApi }>(mode === 'api-new' ? base : `${base}/${encodeURIComponent(apiId || '')}`, { method: mode === 'api-new' ? 'POST' : 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify(apiForm) })
       setServices((current) => current.map((service) => service.id === serviceId ? {
         ...service,
         apis: mode === 'api-new' ? [...service.apis, result.api] : service.apis.map((api) => api.id === result.api.id ? result.api : api),

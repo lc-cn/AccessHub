@@ -15,9 +15,10 @@ import {
   Users,
   Webhook,
   Waypoints,
+  Wrench,
 } from 'lucide-react'
 
-export type WorkspaceRoute = 'dashboard' | 'api-keys' | 'redeem' | 'catalog' | 'catalog-service' | 'catalog-api' | 'codes' | 'codes-new' | 'plans' | 'plans-new' | 'plans-edit' | 'skus' | 'skus-new' | 'skus-edit' | 'services' | 'services-new' | 'services-edit' | 'service-api-new' | 'service-api-edit' | 'permissions' | 'permissions-new' | 'permissions-edit' | 'subscriptions' | 'orders' | 'order-detail' | 'payments' | 'users' | 'logs' | 'afdian' | 'afdian-new' | 'afdian-edit' | 'afdian-orders' | 'afdian-order-detail' | 'afdian-events'
+export type WorkspaceRoute = 'dashboard' | 'api-keys' | 'redeem' | 'catalog' | 'catalog-service' | 'catalog-api' | 'codes' | 'codes-new' | 'plans' | 'plans-new' | 'plans-edit' | 'skus' | 'skus-new' | 'skus-edit' | 'service-api-new' | 'service-api-edit' | 'services' | 'services-new' | 'services-edit' | 'permissions' | 'permissions-new' | 'permissions-edit' | 'subscriptions' | 'orders' | 'order-detail' | 'payments' | 'users' | 'operations' | 'logs' | 'afdian' | 'afdian-new' | 'afdian-edit' | 'afdian-orders' | 'afdian-order-detail' | 'afdian-events'
 
 export type WorkspaceNavItem = {
   label: string
@@ -84,6 +85,7 @@ export const workspaceNavGroups: WorkspaceNavGroup[] = [
     label: '系统',
     admin: true,
     items: [
+      { label: '运行中心', description: '失败任务与人工恢复', href: '/admin/operations', active: ['operations'], icon: Wrench },
       { label: '活动日志', description: '关键业务审计', href: '/admin/logs', active: ['logs'], icon: History },
     ],
   },
@@ -117,6 +119,7 @@ export const workspaceRouteMeta: Record<WorkspaceRoute, { eyebrow: string; title
   'order-detail': { eyebrow: '商业中心 / 订单', title: '订单详情', description: '查看支付、SKU、交付和核销闭环。', admin: true },
   payments: { eyebrow: '商业中心 / 交易', title: '支付', description: '追踪各支付服务商的资金交易状态。', admin: true },
   users: { eyebrow: '商业中心 / 客户', title: '用户', description: '查看平台账户、身份和系统角色。', admin: true },
+  operations: { eyebrow: '系统 / 运维', title: '运行中心', description: '查看异步任务异常并安全执行人工恢复。', admin: true },
   logs: { eyebrow: '系统 / 审计', title: '活动日志', description: '审计平台内的重要业务操作。', admin: true },
   afdian: { eyebrow: '爱发电 / 商品', title: '商品映射', description: '连接爱发电方案或 SKU 与本地商品目录。', admin: true },
   'afdian-new': { eyebrow: '爱发电 / 商品映射', title: '新增映射', description: '建立一个爱发电商品到本地 SKU 的履约规则。', admin: true },
