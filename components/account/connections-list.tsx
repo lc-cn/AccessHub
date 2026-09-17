@@ -11,7 +11,7 @@ import { Feedback, Status, dangerButton, formatDate, primaryButton, secondaryBut
 type Identity = { id: string; provider: string; hasPassword: boolean; createdAt: Date }
 type FeedbackState = { tone: 'success' | 'error' | 'info'; text: string } | null
 const providers = {
-  rbac: { label: 'ProfileHub', description: '使用统一身份登录，账号权限仍由 AccessHub 独立管理。', icon: ShieldCheck },
+  profilehub: { label: 'ProfileHub', description: '使用统一身份登录，账号权限仍由 AccessHub 独立管理。', icon: ShieldCheck },
   github: { label: 'GitHub', description: '用于登录 AccessHub，不会读取仓库内容。', icon: GitBranch },
   afdian: { label: '爱发电', description: '识别你的购买订单，并允许使用爱发电身份登录。', icon: HeartHandshake },
   credential: { label: '邮箱密码', description: '使用已验证的主邮箱和密码登录。', icon: KeyRound },
@@ -24,7 +24,7 @@ export function ConnectionsList({ identities, profileHubAvailable, afdianAvailab
   const [feedback, setFeedback] = useState<FeedbackState>(null)
   const byProvider = new Map(identities.map((item) => [item.provider, item]))
 
-  const link = async (provider: 'rbac' | 'github' | 'afdian') => {
+  const link = async (provider: 'profilehub' | 'github' | 'afdian') => {
     setPending(provider); setFeedback({ tone: 'info', text: `正在前往 ${providers[provider].label} 确认绑定…` })
     try {
       const result = await authClient.linkSocial({ provider, callbackURL: '/account/connections' })
@@ -47,11 +47,11 @@ export function ConnectionsList({ identities, profileHubAvailable, afdianAvailab
     } finally { setPending('') }
   }
 
-  return <div className="space-y-4">{feedback && <Feedback tone={feedback.tone}>{feedback.text}</Feedback>}{(['rbac', 'github', 'afdian', 'credential'] as const).map((provider) => {
+  return <div className="space-y-4">{feedback && <Feedback tone={feedback.tone}>{feedback.text}</Feedback>}{(['profilehub', 'github', 'afdian', 'credential'] as const).map((provider) => {
     const meta = providers[provider]
     const Icon = meta.icon
     const identity = byProvider.get(provider)
-    const unavailable = (provider === 'rbac' && !profileHubAvailable) || (provider === 'afdian' && !afdianAvailable)
+    const unavailable = (provider === 'profilehub' && !profileHubAvailable) || (provider === 'afdian' && !afdianAvailable)
     const lastIdentity = identities.length <= 1
     const isConfirming = confirming?.id === identity?.id
     return <article key={provider} className={`rounded-2xl border p-4 transition duration-200 ${identity ? 'border-slate-200 bg-white' : 'border-slate-100 bg-slate-50/60'}`}>

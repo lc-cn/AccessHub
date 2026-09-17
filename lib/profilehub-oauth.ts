@@ -4,8 +4,7 @@ type FetchBinding = { fetch(request: Request): Promise<Response> }
 
 let profileHubTransportInstalled = false
 
-// Stable account-linking key: changing it would disconnect existing Better Auth accounts.
-export const PROFILEHUB_PROVIDER_ID = 'rbac'
+export const PROFILEHUB_PROVIDER_ID = 'profilehub'
 
 export function createProfileHubFetchRouter(
   issuer: string,
@@ -27,9 +26,9 @@ export function installProfileHubFetchRouter(issuer: string, binding: FetchBindi
 }
 
 export function getProfileHubOAuthConfig(env: Record<string, string | undefined> = process.env): GenericOAuthConfig | null {
-  const issuer = (env.PROFILEHUB_ISSUER_URL ?? env.RBAC_ISSUER_URL)?.trim().replace(/\/+$/, '')
-  const clientId = (env.PROFILEHUB_CLIENT_ID ?? env.RBAC_CLIENT_ID)?.trim()
-  const clientSecret = (env.PROFILEHUB_CLIENT_SECRET ?? env.RBAC_CLIENT_SECRET)?.trim()
+  const issuer = env.PROFILEHUB_ISSUER_URL?.trim().replace(/\/+$/, '')
+  const clientId = env.PROFILEHUB_CLIENT_ID?.trim()
+  const clientSecret = env.PROFILEHUB_CLIENT_SECRET?.trim()
   if (!issuer && !clientId && !clientSecret) return null
   if (!issuer || !clientId || !clientSecret) throw new Error('ProfileHub OAuth 需要配置 PROFILEHUB_ISSUER_URL、PROFILEHUB_CLIENT_ID、PROFILEHUB_CLIENT_SECRET')
   const url = new URL(issuer)

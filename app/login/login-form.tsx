@@ -18,7 +18,7 @@ import { useCodeSendCooldown } from "@/lib/use-code-send-cooldown";
 
 export default function LoginForm({ profileHubEnabled }: { profileHubEnabled: boolean }) {
   const [pending, setPending] = useState<
-    | "rbac"
+    | "profilehub"
     | "github"
     | "afdian"
     | "email"
@@ -42,7 +42,7 @@ export default function LoginForm({ profileHubEnabled }: { profileHubEnabled: bo
       : "/dashboard";
   };
 
-  const signIn = async (provider: "github" | "afdian" | "rbac") => {
+  const signIn = async (provider: "github" | "afdian" | "profilehub") => {
     setPending(provider);
     setError("");
     const next = new URLSearchParams(window.location.search).get("next");
@@ -51,7 +51,7 @@ export default function LoginForm({ profileHubEnabled }: { profileHubEnabled: bo
     const result = await authClient.signIn.social({ provider, callbackURL });
     if (result?.error) {
       setError(
-        provider === "rbac"
+        provider === "profilehub"
           ? "ProfileHub 登录暂时不可用，请稍后重试。"
           : provider === "afdian"
           ? "爱发电登录暂时不可用；首次使用请先通过 GitHub 登录并绑定。"
@@ -205,12 +205,12 @@ export default function LoginForm({ profileHubEnabled }: { profileHubEnabled: bo
           <div className="mt-9 space-y-3">
             {profileHubEnabled && (
               <button
-                onClick={() => void signIn("rbac")}
+                onClick={() => void signIn("profilehub")}
                 disabled={pending !== null}
                 className="flex h-12 w-full items-center justify-center gap-3 rounded-xl border border-slate-200 bg-white text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
               >
                 <KeyRound size={18} />
-                {pending === "rbac" ? "正在跳转…" : "使用 ProfileHub 登录"}
+                {pending === "profilehub" ? "正在跳转…" : "使用 ProfileHub 登录"}
               </button>
             )}
             <button

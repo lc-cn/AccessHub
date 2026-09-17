@@ -50,7 +50,7 @@ On Cloudflare, a Mailjet SMTP configuration is sent through Mailjet Send API v3.
 
 ## 3. Apply the database migration
 
-Apply SQL files through `drizzle/0019_commerce_dead_letters.sql` to the existing PostgreSQL database before deploying the asynchronous commerce worker. Audit and stage the `0018` integrity constraints according to [database-integrity.md](database-integrity.md); it intentionally is not part of an unattended deploy. Existing services are retained as `http` transports, and existing services remain open to all authenticated users until a required permission is selected.
+Apply SQL files through `drizzle/0020_profilehub_provider.sql` to the existing PostgreSQL database before deploying. Migration `0020` renames existing OAuth account identities to the canonical `profilehub` provider. Audit and stage the `0018` integrity constraints according to [database-integrity.md](database-integrity.md); it intentionally is not part of an unattended deploy. Existing services are retained as `http` transports, and existing services remain open to all authenticated users until a required permission is selected.
 
 The first preview can use `DATABASE_URL` directly. For production, create a Hyperdrive configuration for the same database in the Cloudflare dashboard, uncomment the `HYPERDRIVE` block in `wrangler.jsonc`, and insert its configuration ID. AccessHub automatically prefers `HYPERDRIVE.connectionString` when the binding exists and falls back to `DATABASE_URL` otherwise.
 
