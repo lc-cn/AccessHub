@@ -145,7 +145,7 @@ return betterAuth({
 
 let authInstance: ReturnType<typeof createAuth> | undefined
 let authInstanceCreatedAt = 0
-const AUTH_INSTANCE_TTL_MS = 5 * 60 * 1000
+const AUTH_INSTANCE_TTL_MS = 60 * 1000
 
 function getAuth() {
   // Generic OAuth performs discovery during initialization. Workers only allow

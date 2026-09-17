@@ -46,7 +46,7 @@ Better Auth 的 `providerId` 与回调路径中的 `rbac` 保留：这是已有�
 
 以下为旧域名时期的历史验收，不能作为新域名部署成功的证明。本应用为 `https://l2cl.link`；Client ID 为 `l2cl-production`。三个旧 RBAC 配置以 Cloudflare Secret 保存。当时验收 Worker 版本为 `e3a2677f-94ba-47a0-a783-cb782571d973`。
 
-Workers 不允许模块初始化期间发起 Discovery 网络请求，因此 `lib/auth.ts` 延迟至请求期间创建 Better Auth 实例，并以 5 分钟 TTL 缓存。不要恢复模块顶层的 `betterAuth(...)` 调用或永久缓存，否则临时 Discovery 故障会让 Generic OAuth Provider 在整个 isolate 生命周期内被跳过，登录返回 `PROVIDER_NOT_FOUND`。
+Workers 不允许模块初始化期间发起 Discovery 网络请求，因此 `lib/auth.ts` 延迟至请求期间创建 Better Auth 实例，并以 60 秒 TTL 缓存。不要恢复模块顶层的 `betterAuth(...)` 调用或永久缓存，否则临时 Discovery 故障会让 Generic OAuth Provider 在整个 isolate 生命周期内被跳过，登录返回 `PROVIDER_NOT_FOUND`。
 
 AccessHub 与 ProfileHub 位于同一个 Cloudflare Zone，而 ProfileHub 的源站在 Vercel。生产环境通过私有 `PROFILEHUB_EGRESS` Service Binding，将 Discovery、JWKS、Token 和 UserInfo 请求交给不对公网开放的 Commerce Worker 出站；允许列表之外的请求一律返回 404。Commerce Worker 使用 `cf.resolveOverride=profile-origin.l2cl.link`，对应 DNS-only CNAME `profile-origin.l2cl.link → profile-liucl.vercel.app`，从而绕过同 Zone Worker 路由。浏览器授权地址、TLS SNI、HTTP Host、OIDC issuer 和所有公开文案仍为 `https://profile.l2cl.link`。
 
