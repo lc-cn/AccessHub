@@ -4,8 +4,8 @@ import { proxyProfileHubRequest } from './profilehub-egress.ts'
 
 test('ProfileHub egress only forwards required OAuth endpoints', async () => {
   const calls: Request[] = []
-  const upstream = async (request: RequestInfo | URL) => {
-    calls.push(request as Request)
+  const upstream = async (request: RequestInfo | URL, init?: RequestInit) => {
+    calls.push(new Request(request, init))
     return new Response('upstream')
   }
 
@@ -31,8 +31,8 @@ test('ProfileHub egress rebuilds the service-binding request before public fetch
     body: 'grant_type=authorization_code',
   })
   let forwarded: Request | undefined
-  await proxyProfileHubRequest(original, (async (request) => {
-    forwarded = request as Request
+  await proxyProfileHubRequest(original, (async (request, init) => {
+    forwarded = new Request(request, init)
     return new Response('ok')
   }) as typeof fetch)
 

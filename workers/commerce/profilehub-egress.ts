@@ -20,13 +20,11 @@ export async function proxyProfileHubRequest(
   // metadata. Reusing it with fetch() sends it back to this Worker. Rebuild
   // the public request from HTTP fields only so it resolves via normal DNS.
   const body = request.method === 'GET' || request.method === 'HEAD' ? undefined : await request.arrayBuffer()
-  const upstreamRequest = new Request(url, {
+  return upstreamFetch(url.toString(), {
     method: request.method,
     headers: request.headers,
     body,
     redirect: 'follow',
-  })
-  return upstreamFetch(upstreamRequest, {
     cf: { resolveOverride: PROFILEHUB_RESOLVE_OVERRIDE },
   })
 }
