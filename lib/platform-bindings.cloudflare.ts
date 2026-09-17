@@ -23,7 +23,8 @@ const bindings = env as unknown as RuntimeBindings
 
 export function getServiceBinding(name: string): ServiceBinding | null {
   const binding = bindings[name]
-  if (!binding || typeof binding !== 'object' || typeof (binding as ServiceBinding).fetch !== 'function') return null
+  const bindingType = typeof binding
+  if (!binding || (bindingType !== 'object' && bindingType !== 'function') || typeof (binding as ServiceBinding).fetch !== 'function') return null
   return binding as ServiceBinding
 }
 
