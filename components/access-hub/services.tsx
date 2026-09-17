@@ -59,9 +59,14 @@ export function Services({ mode, resourceId }: { mode: Mode; resourceId?: string
     setSaving(true); setNotice(null)
     try {
       const result = await requestJson<{ service: ApiService }>('/api/admin', { method: mode === 'new' ? 'POST' : 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ type: 'service', serviceId, ...serviceForm }) })
-      await load()
-      if (mode === 'new') router.replace(`/admin/services/${result.service.id}`)
-      else { setServiceForm(serviceFormFor(result.service)); setNotice({ tone: 'success', text: '服务连接已保存，鉴权密钥不会回显。' }) }
+      if (mode === 'new') {
+        setServices((current) => [...current, result.service])
+        router.replace(`/admin/services/${result.service.id}`)
+      } else {
+        setServices((current) => current.map((service) => service.id === result.service.id ? { ...service, ...result.service, apis: service.apis } : service))
+        setServiceForm(serviceFormFor(result.service))
+        setNotice({ tone: 'success', text: '服务连接已保存，鉴权密钥不会回显。' })
+      }
     } catch (error) { setNotice({ tone: 'error', text: error instanceof Error ? error.message : '服务保存失败' }) }
     finally { setSaving(false) }
   }
@@ -71,7 +76,10 @@ export function Services({ mode, resourceId }: { mode: Mode; resourceId?: string
     setSaving(true); setNotice(null)
     try {
       const result = await requestJson<{ api: ServiceApi }>('/api/admin', { method: mode === 'api-new' ? 'POST' : 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ type: 'service-api', serviceId, apiId, ...apiForm }) })
-      await load()
+      setServices((current) => current.map((service) => service.id === serviceId ? {
+        ...service,
+        apis: mode === 'api-new' ? [...service.apis, result.api] : service.apis.map((api) => api.id === result.api.id ? result.api : api),
+      } : service))
       if (mode === 'api-new') router.replace(`/admin/services/${serviceId}/apis/${result.api.id}`)
       else { setApiForm(apiFormFor(result.api)); setNotice({ tone: 'success', text: 'API 契约已保存' }) }
     } catch (error) { setNotice({ tone: 'error', text: error instanceof Error ? error.message : 'API 保存失败' }) }
