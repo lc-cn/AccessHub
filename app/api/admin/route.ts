@@ -8,7 +8,7 @@ import { parseBenefitInput, parseSubscriptionPlanPolicyInput } from '@/lib/admin
 import { db, withRequestDatabase } from '@/lib/db'
 import { activityLogs, apiServices, orders, payments, permissions as permissionDefinitions, planPermissionGrants, providerEvents, providerOfferMappings, redeemCodes, serviceApis, skus, subscriptionPlans, subscriptions, user } from '@/lib/db/schema'
 import { legacyDurationDays, parsePositiveInteger } from '@/lib/entitlements'
-import { parseServiceApiInput, parseServiceAuthInput, parseServiceInput, sealServiceAuth } from '@/lib/api-services'
+import { openServiceAuth, parseServiceApiInput, parseServiceAuthInput, parseServiceAuthUpdate, parseServiceInput, presentServiceAuth, sealServiceAuth, type ServiceAuthType } from '@/lib/api-services'
 import { subscriptionStatuses, type SubscriptionStatus } from '@/lib/subscription-state'
 import { transitionSubscription } from '@/lib/subscription-service'
 import { hasWorkerServiceBinding, workerServiceBindings } from '@/lib/worker-service-bindings'
@@ -25,6 +25,11 @@ async function requireAdmin() {
     return session.user.id
   }
   return null
+}
+
+function serializeApiService<T extends { authType: string; authConfigEncrypted: string | null }>(service: T) {
+  const { authConfigEncrypted, ...publicService } = service
+  return { ...publicService, ...presentServiceAuth(service.authType as ServiceAuthType, authConfigEncrypted) }
 }
 
 export async function GET(request: Request) {
@@ -79,14 +84,14 @@ export async function GET(request: Request) {
       wants('logs', 'afdian-events') ? db.select({ id: providerEvents.id, providerId: providerEvents.providerId, externalEventId: providerEvents.externalEventId, type: providerEvents.type, status: providerEvents.status, error: providerEvents.error, processedAt: providerEvents.processedAt, createdAt: providerEvents.createdAt }).from(providerEvents).where(section === 'afdian-events' ? eq(providerEvents.providerId, 'psp-afdian') : undefined).orderBy(desc(providerEvents.createdAt)).limit(500) : Promise.resolve([]),
     ])
     const [serviceRows, serviceApiRows, permissionRows, permissionGrantRows] = await Promise.all([
-      wants('services', 'permissions') ? db.select({ id: apiServices.id, code: apiServices.code, name: apiServices.name, description: apiServices.description, transport: apiServices.transport, bindingName: apiServices.bindingName, baseUrl: apiServices.baseUrl, authType: apiServices.authType, authConfigured: sql<boolean>`${apiServices.authConfigEncrypted} is not null`, requiredPermissionId: apiServices.requiredPermissionId, requiredPermissionCode: permissionDefinitions.code, requiredPermissionName: permissionDefinitions.name, enabled: apiServices.enabled, createdAt: apiServices.createdAt, updatedAt: apiServices.updatedAt }).from(apiServices).leftJoin(permissionDefinitions, eq(permissionDefinitions.id, apiServices.requiredPermissionId)).orderBy(desc(apiServices.updatedAt)) : Promise.resolve([]),
+      wants('services', 'permissions') ? db.select({ id: apiServices.id, code: apiServices.code, name: apiServices.name, description: apiServices.description, transport: apiServices.transport, bindingName: apiServices.bindingName, baseUrl: apiServices.baseUrl, authType: apiServices.authType, authConfigEncrypted: apiServices.authConfigEncrypted, requiredPermissionId: apiServices.requiredPermissionId, requiredPermissionCode: permissionDefinitions.code, requiredPermissionName: permissionDefinitions.name, enabled: apiServices.enabled, createdAt: apiServices.createdAt, updatedAt: apiServices.updatedAt }).from(apiServices).leftJoin(permissionDefinitions, eq(permissionDefinitions.id, apiServices.requiredPermissionId)).orderBy(desc(apiServices.updatedAt)) : Promise.resolve([]),
       wants('services') ? db.select().from(serviceApis).orderBy(asc(serviceApis.serviceId), asc(serviceApis.createdAt)) : Promise.resolve([]),
       wants('services', 'permissions') ? db.select().from(permissionDefinitions).orderBy(asc(permissionDefinitions.name), asc(permissionDefinitions.code)) : Promise.resolve([]),
       wants('services', 'permissions') ? db.select({ permissionId: planPermissionGrants.permissionId, planId: planPermissionGrants.planId }).from(planPermissionGrants) : Promise.resolve([]),
     ])
     const permissionCatalog = permissionRows.map((permission) => ({ ...permission, planIds: permissionGrantRows.filter((grant) => grant.permissionId === permission.id).map((grant) => grant.planId), serviceCount: serviceRows.filter((service) => service.requiredPermissionId === permission.id).length }))
     const fulfilledOrders = orderRows.filter((order) => section !== 'afdian-orders' || order.providerId === 'psp-afdian').map((order) => ({ ...order, codes: orderCodes.filter((code) => code.orderId === order.id) }))
-    return NextResponse.json({ plans, codes, afdianMappings: mappings, orders: fulfilledOrders, skus: skuRows, users, logs, subscriptions: subscriptionRows, payments: paymentRows, providerEvents: eventRows, services: serviceRows.map((service) => ({ ...service, apis: serviceApiRows.filter((api) => api.serviceId === service.id) })), permissions: permissionCatalog, workerBindings: wants('services') ? workerServiceBindings : [], afadianWebhookConfigured: Boolean(process.env.AFDIAN_WEBHOOK_SECRET), afadianMessengerConfigured: Boolean(process.env.AFDIAN_USER_ID && process.env.AFDIAN_ADMIN_TOKEN) })
+    return NextResponse.json({ plans, codes, afdianMappings: mappings, orders: fulfilledOrders, skus: skuRows, users, logs, subscriptions: subscriptionRows, payments: paymentRows, providerEvents: eventRows, services: serviceRows.map((service) => ({ ...serializeApiService(service), apis: serviceApiRows.filter((api) => api.serviceId === service.id) })), permissions: permissionCatalog, workerBindings: wants('services') ? workerServiceBindings : [], afadianWebhookConfigured: Boolean(process.env.AFDIAN_WEBHOOK_SECRET), afadianMessengerConfigured: Boolean(process.env.AFDIAN_USER_ID && process.env.AFDIAN_ADMIN_TOKEN) })
   })
 }
 
@@ -186,7 +191,7 @@ export async function POST(request: Request) {
     catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : '服务鉴权配置加密失败' }, { status: 503 }) }
     const [created] = await db.insert(apiServices).values({ id: randomUUID(), ...parsed.value, authConfigEncrypted }).returning()
     await recordActivity({ actorId, action: 'api_service.created', resourceType: 'api_service', resourceId: created.id, detail: `${created.code} ${created.name}` })
-    return NextResponse.json({ service: { ...created, authConfigEncrypted: undefined, authConfigured: Boolean(created.authConfigEncrypted), apis: [] } })
+    return NextResponse.json({ service: { ...serializeApiService(created), apis: [] } })
   }
   if (body.type === 'service-api') {
     const serviceId = String(body.serviceId || '')
@@ -268,18 +273,18 @@ export async function PATCH(request: Request) {
     if (!existing) return NextResponse.json({ error: '服务不存在' }, { status: 404 })
     const [sameCode] = await db.select({ id: apiServices.id }).from(apiServices).where(and(eq(apiServices.code, parsed.value.code), not(eq(apiServices.id, serviceId)))).limit(1)
     if (sameCode) return NextResponse.json({ error: '服务编码已存在' }, { status: 409 })
-    const credentialsChanged = ['authToken', 'authValue', 'authPassword'].some((key) => String(body[key] || '').length > 0)
-    let authConfigEncrypted = existing.authConfigEncrypted
-    if (parsed.value.authType === 'none') authConfigEncrypted = null
-    else if (credentialsChanged || parsed.value.authType !== existing.authType || !existing.authConfigEncrypted) {
-      const auth = parseServiceAuthInput(parsed.value.authType, body)
-      if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: 400 })
-      try { authConfigEncrypted = auth.value ? sealServiceAuth(auth.value) : null }
-      catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : '服务鉴权配置加密失败' }, { status: 503 }) }
-    }
+    let existingAuth = null
+    try {
+      if (parsed.value.authType === existing.authType && existing.authConfigEncrypted) existingAuth = openServiceAuth(existing.authConfigEncrypted)
+    } catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : '现有服务鉴权配置读取失败' }, { status: 503 }) }
+    const auth = parseServiceAuthUpdate(parsed.value.authType, body, existingAuth)
+    if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: 400 })
+    let authConfigEncrypted: string | null = null
+    try { authConfigEncrypted = auth.value ? sealServiceAuth(auth.value) : null }
+    catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : '服务鉴权配置加密失败' }, { status: 503 }) }
     const [updated] = await db.update(apiServices).set({ ...parsed.value, authConfigEncrypted, updatedAt: new Date() }).where(eq(apiServices.id, serviceId)).returning()
     await recordActivity({ actorId, action: 'api_service.updated', resourceType: 'api_service', resourceId: updated.id, detail: `${updated.code} ${updated.name}` })
-    return NextResponse.json({ service: { ...updated, authConfigEncrypted: undefined, authConfigured: Boolean(updated.authConfigEncrypted) } })
+    return NextResponse.json({ service: serializeApiService(updated) })
   }
   if (body.type === 'service-api') {
     const serviceId = String(body.serviceId || '')

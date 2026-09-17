@@ -61,26 +61,39 @@ export function parseServiceApiInput(body: Record<string, unknown>) {
 }
 
 export function parseServiceAuthInput(authType: ServiceAuthType, body: Record<string, unknown>): Result<ServiceAuthConfig | null> {
+  return parseServiceAuthUpdate(authType, body, null)
+}
+
+export function parseServiceAuthUpdate(authType: ServiceAuthType, body: Record<string, unknown>, existing: ServiceAuthConfig | null): Result<ServiceAuthConfig | null> {
   if (authType === 'none') return { ok: true, value: null }
   if (authType === 'bearer') {
-    const token = String(body.authToken || '').trim()
+    const token = String(body.authToken || '').trim() || existing?.token || ''
     return token ? { ok: true, value: { token } } : { ok: false, error: '请输入 Bearer Token' }
   }
   if (authType === 'header') {
-    const header = String(body.authHeader || '').trim()
-    const value = String(body.authValue || '').trim()
+    const header = String(body.authHeader ?? existing?.header ?? '').trim()
+    const value = String(body.authValue || '').trim() || existing?.value || ''
     if (!header || !/^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/.test(header)) return { ok: false, error: '请输入有效的鉴权 Header 名称' }
     return value ? { ok: true, value: { header, value } } : { ok: false, error: '请输入鉴权 Header 值' }
   }
   if (authType === 'query') {
-    const query = String(body.authQuery || '').trim()
-    const value = String(body.authValue || '').trim()
+    const query = String(body.authQuery ?? existing?.query ?? '').trim()
+    const value = String(body.authValue || '').trim() || existing?.value || ''
     if (!query || !/^[A-Za-z0-9_.-]+$/.test(query)) return { ok: false, error: '请输入有效的鉴权 Query 参数名' }
     return value ? { ok: true, value: { query, value } } : { ok: false, error: '请输入鉴权 Query 参数值' }
   }
-  const username = String(body.authUsername || '').trim()
-  const password = String(body.authPassword || '')
+  const username = String(body.authUsername ?? existing?.username ?? '').trim()
+  const password = String(body.authPassword || '') || existing?.password || ''
   return username && password ? { ok: true, value: { username, password } } : { ok: false, error: '请输入 Basic Auth 用户名和密码' }
+}
+
+export function presentServiceAuth(authType: ServiceAuthType, encrypted: string | null) {
+  if (!encrypted) return { authConfigured: false }
+  const config = openServiceAuth(encrypted)
+  if (authType === 'header') return { authConfigured: true, authHeader: config.header || '' }
+  if (authType === 'query') return { authConfigured: true, authQuery: config.query || '' }
+  if (authType === 'basic') return { authConfigured: true, authUsername: config.username || '' }
+  return { authConfigured: true }
 }
 
 export function sealServiceAuth(config: ServiceAuthConfig) {

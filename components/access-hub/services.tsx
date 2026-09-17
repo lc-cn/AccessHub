@@ -16,7 +16,7 @@ const emptyService: ServiceForm = { code: '', name: '', description: '', transpo
 const emptyApi: ApiForm = { code: '', name: '', description: '', path: '/', method: 'POST', usageUnits: '1', timeoutMs: '30000', enabled: true, parameters: [] }
 const emptyParameter: ServiceParameter = { name: '', location: 'body', dataType: 'string', required: false, description: '' }
 
-function serviceFormFor(service: ApiService): ServiceForm { return { ...emptyService, code: service.code, name: service.name, description: service.description, transport: service.transport, bindingName: service.bindingName || '', baseUrl: service.baseUrl, authType: service.authType, requiredPermissionId: service.requiredPermissionId || '', enabled: service.enabled } }
+function serviceFormFor(service: ApiService): ServiceForm { return { ...emptyService, code: service.code, name: service.name, description: service.description, transport: service.transport, bindingName: service.bindingName || '', baseUrl: service.baseUrl, authType: service.authType, authHeader: service.authHeader || emptyService.authHeader, authQuery: service.authQuery || emptyService.authQuery, authUsername: service.authUsername || '', requiredPermissionId: service.requiredPermissionId || '', enabled: service.enabled } }
 function apiFormFor(api: ServiceApi): ApiForm { return { code: api.code, name: api.name, description: api.description, path: api.path, method: api.method, usageUnits: String(api.usageUnits), timeoutMs: String(api.timeoutMs), enabled: api.enabled, parameters: api.parameters } }
 
 export function Services({ mode, resourceId }: { mode: Mode; resourceId?: string }) {
@@ -133,7 +133,7 @@ function ServiceEditor({ mode, service, workerBindings, permissions, form, setFo
 }
 
 function ServiceAuthEditor({ service, form, setForm }: { service: ApiService | null; form: ServiceForm; setForm: (value: ServiceForm) => void }) {
-  const configuredHint = service?.authConfigured ? '修改参数名时需同时重新填写密钥值' : undefined
+  const configuredHint = service?.authConfigured ? '留空则保留现有密钥值' : undefined
   return <section className="mt-7 rounded-2xl border border-slate-200 p-5">
     <div className="flex items-center gap-3"><span className="grid size-9 place-items-center rounded-xl bg-[#edf2ff] text-[#3157d5]"><ShieldCheck size={16}/></span><div><h3 className="text-sm font-medium">上游鉴权</h3><p className="mt-0.5 text-xs text-slate-400">密钥加密保存，保存后不会在页面或 API 中回显。</p></div></div>
     <div className="mt-5 grid gap-4 sm:grid-cols-2">
@@ -141,7 +141,7 @@ function ServiceAuthEditor({ service, form, setForm }: { service: ApiService | n
       {form.authType === 'bearer' && <Field label="Token" hint={service?.authConfigured ? '留空则保留现有 Token' : undefined}><input type="password" autoComplete="new-password" className="access-input" value={form.authToken} onChange={(event) => setForm({ ...form, authToken: event.target.value })} placeholder={service?.authConfigured ? '已安全配置' : '输入上游 Token'}/></Field>}
       {form.authType === 'header' && <><Field label="Header 名称"><input className="access-input font-mono" value={form.authHeader} onChange={(event) => setForm({ ...form, authHeader: event.target.value })} placeholder="x-api-key"/></Field><Field label="Header 值" hint={configuredHint}><input type="password" autoComplete="new-password" className="access-input" value={form.authValue} onChange={(event) => setForm({ ...form, authValue: event.target.value })} placeholder={service?.authConfigured ? '已安全配置' : '输入密钥'}/></Field></>}
       {form.authType === 'query' && <><Field label="Query 参数名"><input className="access-input font-mono" value={form.authQuery} onChange={(event) => setForm({ ...form, authQuery: event.target.value })} placeholder="api_key"/></Field><Field label="Query 参数值" hint={configuredHint || '调用上游时由网关自动注入'}><input type="password" autoComplete="new-password" className="access-input" value={form.authValue} onChange={(event) => setForm({ ...form, authValue: event.target.value })} placeholder={service?.authConfigured ? '已安全配置' : '输入密钥'}/></Field></>}
-      {form.authType === 'basic' && <><Field label="用户名"><input className="access-input" value={form.authUsername} onChange={(event) => setForm({ ...form, authUsername: event.target.value })}/></Field><Field label="密码" hint={service?.authConfigured ? '如需更换，请同时重新填写用户名和密码' : undefined}><input type="password" autoComplete="new-password" className="access-input" value={form.authPassword} onChange={(event) => setForm({ ...form, authPassword: event.target.value })}/></Field></>}
+      {form.authType === 'basic' && <><Field label="用户名"><input className="access-input" value={form.authUsername} onChange={(event) => setForm({ ...form, authUsername: event.target.value })}/></Field><Field label="密码" hint={service?.authConfigured ? '留空则保留现有密码' : undefined}><input type="password" autoComplete="new-password" className="access-input" value={form.authPassword} onChange={(event) => setForm({ ...form, authPassword: event.target.value })}/></Field></>}
     </div>
   </section>
 }

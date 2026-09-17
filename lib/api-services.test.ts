@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { applyServiceQueryAuth, joinServiceUrl, openServiceAuth, parseServiceApiInput, parseServiceInput, sealServiceAuth, serviceAuthHeaders } from './api-services.ts'
+import { applyServiceQueryAuth, joinServiceUrl, openServiceAuth, parseServiceApiInput, parseServiceAuthUpdate, parseServiceInput, presentServiceAuth, sealServiceAuth, serviceAuthHeaders } from './api-services.ts'
 
 test('parses a public API service and rejects private upstreams', () => {
   assert.equal(parseServiceInput({ code: 'open-ai', name: 'OpenAI', baseUrl: 'https://api.example.com/v1/' }).ok, true)
@@ -57,6 +57,25 @@ test('injects encrypted query authentication into the upstream URL', () => {
     applyServiceQueryAuth(target, 'query', encrypted)
     assert.equal(target.searchParams.get('api_key'), 'secret-query-value')
     assert.equal(encrypted.includes('secret-query-value'), false)
+  } finally {
+    if (original == null) delete process.env.SERVICE_CREDENTIALS_KEY
+    else process.env.SERVICE_CREDENTIALS_KEY = original
+  }
+})
+
+test('updates a query auth parameter name while preserving the stored secret', () => {
+  const result = parseServiceAuthUpdate('query', { authQuery: 'key', authValue: '' }, { query: 'api_key', value: 'stored-secret' })
+  assert.deepEqual(result, { ok: true, value: { query: 'key', value: 'stored-secret' } })
+})
+
+test('presents editable auth metadata without exposing secrets', () => {
+  const original = process.env.SERVICE_CREDENTIALS_KEY
+  process.env.SERVICE_CREDENTIALS_KEY = 'test-only-service-credential-key-32-bytes'
+  try {
+    const encrypted = sealServiceAuth({ query: 'api_key', value: 'stored-secret' })
+    const presented = presentServiceAuth('query', encrypted)
+    assert.deepEqual(presented, { authConfigured: true, authQuery: 'api_key' })
+    assert.equal('authValue' in presented, false)
   } finally {
     if (original == null) delete process.env.SERVICE_CREDENTIALS_KEY
     else process.env.SERVICE_CREDENTIALS_KEY = original
