@@ -144,10 +144,20 @@ return betterAuth({
 }
 
 let authInstance: ReturnType<typeof createAuth> | undefined
+let authInstanceCreatedAt = 0
+const AUTH_INSTANCE_TTL_MS = 5 * 60 * 1000
+
 function getAuth() {
   // Generic OAuth performs discovery during initialization. Workers only allow
   // outbound I/O inside a request, so do not initialize at module evaluation.
-  return authInstance ??= createAuth()
+  // Refresh periodically so a transient discovery failure cannot leave a warm
+  // isolate without the provider for the rest of its lifetime.
+  const now = Date.now()
+  if (!authInstance || now - authInstanceCreatedAt >= AUTH_INSTANCE_TTL_MS) {
+    authInstance = createAuth()
+    authInstanceCreatedAt = now
+  }
+  return authInstance
 }
 
 export const auth = {
