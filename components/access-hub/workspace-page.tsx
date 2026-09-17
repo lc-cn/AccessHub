@@ -18,7 +18,7 @@ import type { DashboardData, Sku } from './types'
 import { requestWorkspaceRefresh, useWorkspaceData } from './workspace-data'
 import { type WorkspaceRoute, workspaceRouteMeta } from './workspace-navigation'
 import { WorkspaceShell, WorkspaceSkeleton } from './workspace-shell'
-import { authClient } from '@/lib/auth-client'
+import { authClient, signOutDestination } from '@/lib/auth-client'
 import { requestJson } from '@/lib/http-client'
 
 type Props = { route: WorkspaceRoute; resourceId?: string }
@@ -41,7 +41,7 @@ export function WorkspacePage({ route, resourceId }: Props) {
   const meta = workspaceRouteMeta[route]
   const initializing = loading && !dashboard
   useEffect(() => { document.title = `${meta.title} · AccessHub`; if (!initializing && meta.admin && !isAdmin) router.replace('/dashboard') }, [initializing, isAdmin, meta, router])
-  const signOut = async () => { await authClient.signOut(); clear(); router.replace('/login'); router.refresh() }
+  const signOut = async () => { const destination = await signOutDestination(); clear(); window.location.assign(destination) }
   const refreshWorkspace = () => { requestWorkspaceRefresh(); void loadDashboard() }
   const signIn = async () => { await authClient.signIn.social({ provider: 'github', callbackURL: '/redeem-codes' }) }
   const copyId = async () => { if (!user?.id) return; await navigator.clipboard?.writeText(user.id); setCopied(true); setTimeout(() => setCopied(false), 1600) }

@@ -1,10 +1,10 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname, useRouter } from 'next/navigation'
+import { usePathname } from 'next/navigation'
 import { useState } from 'react'
 import { Activity, ArrowLeft, BadgeCheck, CreditCard, Link2, LogOut, Menu, ReceiptText, ShieldCheck, UserRound, X, Zap } from 'lucide-react'
-import { authClient } from '@/lib/auth-client'
+import { signOutDestination } from '@/lib/auth-client'
 
 const items = [
   { href: '/account', label: '账户概览', description: '账户状态与常用操作', icon: UserRound },
@@ -18,9 +18,8 @@ const items = [
 
 export function AccountShell({ user, children }: { user: { name: string; email: string; image?: string | null }; children: React.ReactNode }) {
   const pathname = usePathname()
-  const router = useRouter()
   const [mobileOpen, setMobileOpen] = useState(false)
-  const signOut = async () => { await authClient.signOut(); router.replace('/login'); router.refresh() }
+  const signOut = async () => { window.location.assign(await signOutDestination()) }
   return <div className="account-canvas min-h-dvh bg-[#f3f6fb] text-[#172033]">
     <a href="#account-content" className="sr-only z-50 rounded-lg bg-white px-4 py-2 text-sm focus:not-sr-only focus:fixed focus:left-4 focus:top-4">跳到主要内容</a>
     <aside className="fixed inset-y-0 left-0 z-20 hidden w-64 border-r border-[#e3e9f3] bg-white px-5 py-6 lg:flex lg:flex-col">

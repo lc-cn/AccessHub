@@ -1,4 +1,6 @@
 import { betterAuth } from 'better-auth'
+import { getRbacOAuthConfig } from '@/lib/rbac-oauth'
+import type { GenericOAuthConfig } from 'better-auth/plugins/generic-oauth'
 import { drizzleAdapter } from 'better-auth/adapters/drizzle'
 import { emailOTP, genericOAuth, twoFactor } from 'better-auth/plugins'
 import { passkey } from '@better-auth/passkey'
@@ -24,11 +26,13 @@ const accountAuthPolicy = getAccountAuthPolicy()
 const emailReady = accountAuthPolicy.emailEnabled
 const baseURL = process.env.BETTER_AUTH_URL || (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : process.env.V0_RUNTIME_URL || 'http://localhost:3000')
 const relyingParty = new URL(baseURL)
+const rbacOAuth = getRbacOAuthConfig()
+console.info("RBAC initialization diagnostics", { configured: Boolean(rbacOAuth) })
 
 export const auth = betterAuth({
   database: drizzleAdapter(db, { provider: 'pg', schema: allTables }),
   baseURL,
-  trustedOrigins: origins,
+  trustedOrigins: [...origins, relyingParty.origin],
   socialProviders: { github: { clientId: process.env.GITHUB_CLIENT_ID!, clientSecret: process.env.GITHUB_CLIENT_SECRET! } },
   account: { accountLinking: { enabled: true, disableImplicitLinking: true, allowDifferentEmails: true, trustedProviders: [AFDIAN_PROVIDER_ID] } },
   session: { freshAge: accountAuthPolicy.freshSessionMaxAgeSeconds },
@@ -104,7 +108,9 @@ export const auth = betterAuth({
       ...(emailReady ? { otpOptions: { async sendOTP({ user, otp }) { await sendSecurityCode(user.email, otp, 'mfa') } } } : {}),
     }),
     strongAuthenticationPlugin(),
-    ...(isAfdianOAuthConfigured() ? [genericOAuth({ config: [{
+    ...((isAfdianOAuthConfigured() || rbacOAuth) ? [genericOAuth({ config: [
+    ...(rbacOAuth ? [rbacOAuth] : []),
+    ...(isAfdianOAuthConfigured() ? [{
     providerId: AFDIAN_PROVIDER_ID,
     name: '爱发电',
     clientId: process.env.AFDIAN_OAUTH_CLIENT_ID!,
@@ -120,7 +126,8 @@ export const auth = betterAuth({
     },
     getUserInfo: async (tokens) => tokens.accessToken ? ({ id: tokens.accessToken, name: '爱发电用户', emailVerified: false }) : null,
     accountSubject: ({ profile }) => String(profile.id || ''),
-    }] })] : []),
+    } satisfies GenericOAuthConfig] : []),
+    ] })] : []),
   ],
   advanced: {
     ipAddress: { ipAddressHeaders: [...AUTH_IP_ADDRESS_HEADERS] },
