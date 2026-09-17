@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { getProfileHubOAuthConfig, PROFILEHUB_PROVIDER_ID } from './profilehub-oauth.ts'
+import { createProfileHubFetchRouter, getProfileHubOAuthConfig, PROFILEHUB_PROVIDER_ID } from './profilehub-oauth.ts'
 import { getRbacOAuthConfig, RBAC_PROVIDER_ID } from './rbac-oauth.ts'
 
 const env = {
@@ -36,4 +36,25 @@ test('empty or partial new configuration is explicit and never silently falls ba
   assert.equal(getProfileHubOAuthConfig({}), null)
   assert.throws(() => getProfileHubOAuthConfig({ PROFILEHUB_CLIENT_ID: 'accesshub' }), /PROFILEHUB_ISSUER_URL/)
   assert.throws(() => getProfileHubOAuthConfig({ ...env, PROFILEHUB_CLIENT_SECRET: '', RBAC_CLIENT_SECRET: 'old-secret' }))
+})
+
+test('ProfileHub fetch router only sends issuer requests through the service binding', async () => {
+  const bound: string[] = []
+  const fallback: string[] = []
+  const routedFetch = createProfileHubFetchRouter(
+    'https://profile.l2cl.link/.well-known/openid-configuration',
+    { fetch: async (request) => {
+      bound.push(request.url)
+      return new Response('bound')
+    } },
+    (async (input) => {
+      fallback.push(String(input))
+      return new Response('fallback')
+    }) as typeof fetch,
+  )
+
+  assert.equal(await (await routedFetch('https://profile.l2cl.link/oauth/token')).text(), 'bound')
+  assert.equal(await (await routedFetch('https://example.com/data')).text(), 'fallback')
+  assert.deepEqual(bound, ['https://profile.l2cl.link/oauth/token'])
+  assert.deepEqual(fallback, ['https://example.com/data'])
 })

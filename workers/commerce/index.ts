@@ -7,12 +7,13 @@ import {
   consumeCommerceBatch,
   consumeCommerceDeadLetterBatch,
 } from './queue.ts'
+import { proxyProfileHubRequest } from './profilehub-egress.ts'
 
 export { OrderFulfillmentWorkflow, SubscriptionPeriodWorkflow } from './workflows.ts'
 
 export default {
-  async fetch(): Promise<Response> {
-    return new Response('Not found', { status: 404 })
+  async fetch(request): Promise<Response> {
+    return proxyProfileHubRequest(request)
   },
 
   async queue(batch, env): Promise<void> {

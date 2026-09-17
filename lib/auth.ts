@@ -1,5 +1,5 @@
 import { betterAuth } from 'better-auth'
-import { getProfileHubOAuthConfig } from '@/lib/profilehub-oauth'
+import { getProfileHubOAuthConfig, installProfileHubFetchRouter } from '@/lib/profilehub-oauth'
 import type { GenericOAuthConfig } from 'better-auth/plugins/generic-oauth'
 import { drizzleAdapter } from 'better-auth/adapters/drizzle'
 import { emailOTP, genericOAuth, twoFactor } from 'better-auth/plugins'
@@ -15,6 +15,7 @@ import { AUTH_IP_ADDRESS_HEADERS, getAccountAuthPolicy } from '@/lib/account/aut
 import { recordSecurityEventBestEffort } from '@/lib/account/security-events'
 import { ensureDefaultApiKey } from '@/lib/api-keys'
 import { strongAuthenticationPlugin } from '@/lib/auth-assurance-plugin'
+import { getServiceBinding } from '#accesshub-platform-bindings'
 
 function createAuth() {
 const origins = [
@@ -28,6 +29,9 @@ const emailReady = accountAuthPolicy.emailEnabled
 const baseURL = process.env.BETTER_AUTH_URL || (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : process.env.V0_RUNTIME_URL || 'http://localhost:3000')
 const relyingParty = new URL(baseURL)
 const profileHubOAuth = getProfileHubOAuthConfig()
+if (profileHubOAuth?.discoveryUrl) {
+  installProfileHubFetchRouter(profileHubOAuth.discoveryUrl, getServiceBinding('PROFILEHUB_EGRESS'))
+}
 
 return betterAuth({
   database: drizzleAdapter(db, { provider: 'pg', schema: allTables }),

@@ -1,7 +1,30 @@
 import type { GenericOAuthConfig } from 'better-auth/plugins/generic-oauth'
 
+type FetchBinding = { fetch(request: Request): Promise<Response> }
+
+let profileHubTransportInstalled = false
+
 // Stable account-linking key: changing it would disconnect existing Better Auth accounts.
 export const PROFILEHUB_PROVIDER_ID = 'rbac'
+
+export function createProfileHubFetchRouter(
+  issuer: string,
+  binding: FetchBinding,
+  fallback: typeof fetch,
+): typeof fetch {
+  const issuerOrigin = new URL(issuer).origin
+  return (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const request = input instanceof Request && init === undefined ? input : new Request(input, init)
+    if (new URL(request.url).origin === issuerOrigin) return binding.fetch(request)
+    return fallback(input, init)
+  }) as typeof fetch
+}
+
+export function installProfileHubFetchRouter(issuer: string, binding: FetchBinding | null): void {
+  if (!binding || profileHubTransportInstalled) return
+  globalThis.fetch = createProfileHubFetchRouter(issuer, binding, globalThis.fetch.bind(globalThis))
+  profileHubTransportInstalled = true
+}
 
 export function getProfileHubOAuthConfig(env: Record<string, string | undefined> = process.env): GenericOAuthConfig | null {
   const issuer = (env.PROFILEHUB_ISSUER_URL ?? env.RBAC_ISSUER_URL)?.trim().replace(/\/+$/, '')
