@@ -3,7 +3,7 @@ import { and, count, eq, gt, isNull, or } from 'drizzle-orm'
 import { createApiKey, ensureDefaultApiKey, parseApiKeyCreateInput } from '@/lib/api-keys'
 import { requireSession } from '@/lib/account'
 import { AccountError } from '@/lib/account/errors'
-import { requireFreshSession } from '@/lib/account/fresh-session'
+import { requireStrongSession } from '@/lib/account/strong-session'
 import { getAccountApiKeys } from '@/lib/account/read-models'
 import { recordSecurityEventBestEffort } from '@/lib/account/security-events'
 import { db } from '@/lib/db'
@@ -25,7 +25,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const current = await requireSession()
-    requireFreshSession(current.session)
+    await requireStrongSession(current.session)
     const body = await request.json().catch(() => ({})) as Record<string, unknown>
     const parsed = parseApiKeyCreateInput(body)
     if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 })

@@ -36,6 +36,7 @@ describe('AccountError', () => {
   it('has all valid error codes', () => {
     const codes = [
       'fresh_session_required',
+      'strong_authentication_required',
       'email_not_verified',
       'email_not_configured',
       'last_identity_cannot_be_removed',

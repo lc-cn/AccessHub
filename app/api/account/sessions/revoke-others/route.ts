@@ -3,13 +3,13 @@ import { headers } from 'next/headers'
 import { auth } from '@/lib/auth'
 import { requireSession } from '@/lib/account'
 import { AccountError } from '@/lib/account/errors'
-import { requireFreshSession } from '@/lib/account/fresh-session'
+import { requireStrongSession } from '@/lib/account/strong-session'
 import { recordSecurityEventBestEffort } from '@/lib/account/security-events'
 
 export async function POST() {
   try {
     const current = await requireSession()
-    requireFreshSession(current.session)
+    await requireStrongSession(current.session)
     await auth.api.revokeOtherSessions({ headers: await headers() })
     await recordSecurityEventBestEffort({ actorId: current.user.id, action: 'account.sessions.revoked_all' })
     return NextResponse.json({ ok: true })

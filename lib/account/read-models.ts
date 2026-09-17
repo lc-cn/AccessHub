@@ -9,13 +9,15 @@ import {
   creditTransactions,
   orders,
   payments,
+  passkey,
   planEntitlements,
   redeemCodes,
   session,
   skus,
-  subscriptionPlans,
-  subscriptions,
-  user,
+    subscriptionPlans,
+    subscriptions,
+    twoFactor,
+    user,
 } from '@/lib/db/schema'
 
 export async function getAccountProfile(userId: string) {
@@ -26,6 +28,7 @@ export async function getAccountProfile(userId: string) {
     emailVerified: user.emailVerified,
     image: user.image,
     role: user.role,
+    twoFactorEnabled: user.twoFactorEnabled,
     createdAt: user.createdAt,
   }).from(user).where(eq(user.id, userId)).limit(1)
   return profile ?? null
@@ -63,15 +66,20 @@ export async function getAccountOverview(userId: string) {
 
 export async function getAccountSecurity(userId: string, currentSessionId: string) {
   const now = new Date()
-  const [identities, sessions] = await Promise.all([
+  const [identities, sessions, passkeys, [twoFactorRecord]] = await Promise.all([
     db.select({ id: account.id, provider: account.providerId, hasPassword: sql<boolean>`${account.password} is not null`.mapWith(Boolean), createdAt: account.createdAt })
       .from(account).where(eq(account.userId, userId)).orderBy(account.createdAt),
     db.select({ id: session.id, createdAt: session.createdAt, updatedAt: session.updatedAt, expiresAt: session.expiresAt, ipAddress: session.ipAddress, userAgent: session.userAgent })
       .from(session).where(and(eq(session.userId, userId), gt(session.expiresAt, now))).orderBy(desc(session.updatedAt)),
+    db.select({ id: passkey.id, name: passkey.name, deviceType: passkey.deviceType, backedUp: passkey.backedUp, createdAt: passkey.createdAt })
+      .from(passkey).where(eq(passkey.userId, userId)).orderBy(desc(passkey.createdAt)),
+    db.select({ verified: twoFactor.verified }).from(twoFactor).where(eq(twoFactor.userId, userId)).limit(1),
   ])
   return {
     identities,
     sessions: sessions.map((item) => ({ ...item, current: item.id === currentSessionId })),
+    passkeys,
+    hasTotp: twoFactorRecord?.verified === true,
     hasCredential: identities.some((item) => item.provider === 'credential' && item.hasPassword),
   }
 }

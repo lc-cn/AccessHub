@@ -9,7 +9,7 @@ export function proxy(request: NextRequest) {
     return NextResponse.redirect(canonical, 308)
   }
 
-  if (/^\/(?:api(?:\/|$)|login(?:\/|$)|reset-password(?:\/|$)|privacy(?:\/|$)|terms(?:\/|$))/.test(request.nextUrl.pathname)) {
+  if (/^\/(?:api(?:\/|$)|login(?:\/|$)|register(?:\/|$)|two-factor(?:\/|$)|reset-password(?:\/|$)|privacy(?:\/|$)|terms(?:\/|$))/.test(request.nextUrl.pathname)) {
     return NextResponse.next()
   }
 

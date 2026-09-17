@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { and, eq, isNull } from 'drizzle-orm'
 import { requireSession } from '@/lib/account'
 import { AccountError } from '@/lib/account/errors'
-import { requireFreshSession } from '@/lib/account/fresh-session'
+import { requireStrongSession } from '@/lib/account/strong-session'
 import { recordSecurityEventBestEffort } from '@/lib/account/security-events'
 import { db } from '@/lib/db'
 import { apiKeys } from '@/lib/db/schema'
@@ -10,7 +10,7 @@ import { apiKeys } from '@/lib/db/schema'
 export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const current = await requireSession()
-    requireFreshSession(current.session)
+    await requireStrongSession(current.session)
     const { id } = await params
     const now = new Date()
     const [revoked] = await db.update(apiKeys).set({ revokedAt: now, updatedAt: now }).where(and(eq(apiKeys.id, id), eq(apiKeys.userId, current.user.id), eq(apiKeys.kind, 'custom'), isNull(apiKeys.revokedAt))).returning({ id: apiKeys.id, name: apiKeys.name })

@@ -1,15 +1,18 @@
 import { betterAuth } from 'better-auth'
 import { drizzleAdapter } from 'better-auth/adapters/drizzle'
-import { genericOAuth } from 'better-auth/plugins'
+import { emailOTP, genericOAuth, twoFactor } from 'better-auth/plugins'
+import { passkey } from '@better-auth/passkey'
 import { headers } from 'next/headers'
 import { db } from '@/lib/db'
 import { allTables } from '@/lib/db/schema'
 import { AFDIAN_PROVIDER_ID, afdianOAuthRedirectUri, exchangeAfdianOAuthCode, isAfdianOAuthConfigured } from '@/lib/afdian-oauth'
 import { sendVerificationEmail, sendEmailChangeVerification } from '@/lib/email/verification'
 import { sendPasswordResetEmail } from '@/lib/email/password-reset'
+import { sendSecurityCode } from '@/lib/email/security-code'
 import { AUTH_IP_ADDRESS_HEADERS, getAccountAuthPolicy } from '@/lib/account/auth-policy'
 import { recordSecurityEventBestEffort } from '@/lib/account/security-events'
 import { ensureDefaultApiKey } from '@/lib/api-keys'
+import { strongAuthenticationPlugin } from '@/lib/auth-assurance-plugin'
 
 const origins = [
   'http://localhost:3000',
@@ -19,10 +22,12 @@ const origins = [
 
 const accountAuthPolicy = getAccountAuthPolicy()
 const emailReady = accountAuthPolicy.emailEnabled
+const baseURL = process.env.BETTER_AUTH_URL || (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : process.env.V0_RUNTIME_URL || 'http://localhost:3000')
+const relyingParty = new URL(baseURL)
 
 export const auth = betterAuth({
   database: drizzleAdapter(db, { provider: 'pg', schema: allTables }),
-  baseURL: process.env.BETTER_AUTH_URL || (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : process.env.V0_RUNTIME_URL || 'http://localhost:3000'),
+  baseURL,
   trustedOrigins: origins,
   socialProviders: { github: { clientId: process.env.GITHUB_CLIENT_ID!, clientSecret: process.env.GITHUB_CLIENT_SECRET! } },
   account: { accountLinking: { enabled: true, disableImplicitLinking: true, allowDifferentEmails: true, trustedProviders: [AFDIAN_PROVIDER_ID] } },
@@ -59,7 +64,7 @@ export const auth = betterAuth({
           await recordSecurityEventBestEffort({ actorId: user.id, action: 'account.email.verification_sent' })
         }
       : undefined,
-    sendOnSignUp: emailReady,
+    sendOnSignUp: false,
     autoSignInAfterVerification: true,
     expiresIn: 3600,
     afterEmailVerification: async (user, _request) => {
@@ -81,7 +86,25 @@ export const auth = betterAuth({
         : undefined,
     },
   },
-  plugins: isAfdianOAuthConfigured() ? [genericOAuth({ config: [{
+  plugins: [
+    ...(emailReady ? [emailOTP({
+      disableSignUp: false,
+      sendVerificationOnSignUp: true,
+      otpLength: 6,
+      expiresIn: 600,
+      allowedAttempts: 5,
+      async sendVerificationOTP({ email, otp, type }) {
+        await sendSecurityCode(email, otp, type)
+      },
+    })] : []),
+    passkey({ rpID: relyingParty.hostname, rpName: 'AccessHub', origin: relyingParty.origin }),
+    twoFactor({
+      issuer: 'AccessHub',
+      allowPasswordless: true,
+      ...(emailReady ? { otpOptions: { async sendOTP({ user, otp }) { await sendSecurityCode(user.email, otp, 'mfa') } } } : {}),
+    }),
+    strongAuthenticationPlugin(),
+    ...(isAfdianOAuthConfigured() ? [genericOAuth({ config: [{
     providerId: AFDIAN_PROVIDER_ID,
     name: '爱发电',
     clientId: process.env.AFDIAN_OAUTH_CLIENT_ID!,
@@ -97,7 +120,8 @@ export const auth = betterAuth({
     },
     getUserInfo: async (tokens) => tokens.accessToken ? ({ id: tokens.accessToken, name: '爱发电用户', emailVerified: false }) : null,
     accountSubject: ({ profile }) => String(profile.id || ''),
-  }] })] : [],
+    }] })] : []),
+  ],
   advanced: {
     ipAddress: { ipAddressHeaders: [...AUTH_IP_ADDRESS_HEADERS] },
     ...(process.env.NODE_ENV === 'development'

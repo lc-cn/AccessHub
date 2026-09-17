@@ -4,13 +4,13 @@ import { db } from '@/lib/db'
 import { session as sessionTable } from '@/lib/db/schema'
 import { requireSession } from '@/lib/account'
 import { AccountError } from '@/lib/account/errors'
-import { requireFreshSession } from '@/lib/account/fresh-session'
+import { requireStrongSession } from '@/lib/account/strong-session'
 import { recordSecurityEventBestEffort } from '@/lib/account/security-events'
 
 export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const current = await requireSession()
-    requireFreshSession(current.session)
+    await requireStrongSession(current.session)
     const { id } = await params
     if (id === current.session.id) throw new AccountError('session_not_found', '当前会话请使用退出登录结束。', 400)
     const deleted = await db.delete(sessionTable).where(and(eq(sessionTable.id, id), eq(sessionTable.userId, current.user.id))).returning({ id: sessionTable.id })

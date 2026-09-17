@@ -40,7 +40,9 @@ export function ConnectionsList({ identities, afdianAvailable }: { identities: I
       setFeedback({ tone: 'success', text: `${providers[identity.provider as keyof typeof providers]?.label || '登录方式'}绑定已解除。` })
       setConfirming(null); router.refresh()
     } catch (error) {
-      setFeedback({ tone: 'error', text: error instanceof Error ? error.message : '解除绑定失败。' })
+      const message = error instanceof Error ? error.message : '解除绑定失败。'
+      if (message.includes('近期')) { window.location.assign('/reauthenticate?next=/account/connections'); return }
+      setFeedback({ tone: 'error', text: message })
     } finally { setPending('') }
   }
 

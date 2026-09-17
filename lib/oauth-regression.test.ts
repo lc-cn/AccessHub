@@ -36,9 +36,15 @@ describe('account auth policy', () => {
   it('rate limits each sensitive email endpoint', () => {
     assert.deepEqual(Object.keys(SENSITIVE_AUTH_RATE_LIMITS).sort(), [
       '/change-email',
+      '/email-otp/send-verification-otp',
+      '/email-otp/verify-email',
       '/request-password-reset',
       '/send-verification-email',
+      '/sign-in/email-otp',
       '/sign-up/email',
+      '/two-factor/send-otp',
+      '/two-factor/verify-otp',
+      '/two-factor/verify-totp',
     ])
   })
 

@@ -6,6 +6,12 @@ export const SENSITIVE_AUTH_RATE_LIMITS = {
   '/request-password-reset': { window: 60, max: 5 },
   '/send-verification-email': { window: 60, max: 5 },
   '/change-email': { window: 60, max: 5 },
+  '/email-otp/send-verification-otp': { window: 60, max: 5 },
+  '/email-otp/verify-email': { window: 60, max: 8 },
+  '/sign-in/email-otp': { window: 60, max: 8 },
+  '/two-factor/send-otp': { window: 60, max: 5 },
+  '/two-factor/verify-otp': { window: 60, max: 8 },
+  '/two-factor/verify-totp': { window: 60, max: 8 },
 } as const
 
 export const AUTH_IP_ADDRESS_HEADERS = ['cf-connecting-ip'] as const

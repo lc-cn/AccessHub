@@ -6,13 +6,13 @@ import { db } from '@/lib/db'
 import { account, user } from '@/lib/db/schema'
 import { requireSession } from '@/lib/account'
 import { AccountError } from '@/lib/account/errors'
-import { requireFreshSession } from '@/lib/account/fresh-session'
+import { requireStrongSession } from '@/lib/account/strong-session'
 import { recordSecurityEventBestEffort } from '@/lib/account/security-events'
 
 export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const current = await requireSession()
-    requireFreshSession(current.session)
+    await requireStrongSession(current.session)
     const { id } = await params
     const [identities, [profile]] = await Promise.all([
       db.select({ id: account.id, provider: account.providerId, hasPassword: account.password }).from(account).where(eq(account.userId, current.user.id)),
