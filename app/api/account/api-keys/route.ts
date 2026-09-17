@@ -4,20 +4,17 @@ import { createApiKey, ensureDefaultApiKey, parseApiKeyCreateInput } from '@/lib
 import { requireSession } from '@/lib/account'
 import { AccountError } from '@/lib/account/errors'
 import { requireFreshSession } from '@/lib/account/fresh-session'
-import { getAccountApiKeys, getApiKeyServiceOptions } from '@/lib/account/read-models'
+import { getAccountApiKeys } from '@/lib/account/read-models'
 import { recordSecurityEventBestEffort } from '@/lib/account/security-events'
 import { db } from '@/lib/db'
-import { apiKeys, apiServices } from '@/lib/db/schema'
+import { apiKeys } from '@/lib/db/schema'
 
 export async function GET() {
   try {
     const current = await requireSession()
     await ensureDefaultApiKey(current.user.id)
-    const [currentKeys, services] = await Promise.all([
-      getAccountApiKeys(current.user.id),
-      getApiKeyServiceOptions(),
-    ])
-    return NextResponse.json({ apiKeys: currentKeys, services })
+    const currentKeys = await getAccountApiKeys(current.user.id)
+    return NextResponse.json({ apiKeys: currentKeys })
   } catch (error) {
     if (error instanceof AccountError) return NextResponse.json({ error: error.message, code: error.code }, { status: error.status })
     console.error('[account] Failed to list API keys')
@@ -30,8 +27,7 @@ export async function POST(request: Request) {
     const current = await requireSession()
     requireFreshSession(current.session)
     const body = await request.json().catch(() => ({})) as Record<string, unknown>
-    const services = await db.select({ code: apiServices.code }).from(apiServices).where(eq(apiServices.enabled, true))
-    const parsed = parseApiKeyCreateInput(body, services.map((item) => item.code))
+    const parsed = parseApiKeyCreateInput(body)
     if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 })
     const now = new Date()
     const [active] = await db.select({ count: count() }).from(apiKeys).where(and(eq(apiKeys.userId, current.user.id), isNull(apiKeys.revokedAt), or(isNull(apiKeys.expiresAt), gt(apiKeys.expiresAt, now))))

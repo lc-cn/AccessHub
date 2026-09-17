@@ -1,0 +1,50 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "accesshub-commerce",
+  "main": "workers/commerce/index.ts",
+  "compatibility_date": "2026-09-17",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": false,
+  "preview_urls": false,
+  "placement": {
+    "region": "aws:us-east-1"
+  },
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1
+  },
+  "secrets": {
+    "required": ["COMMERCE_INTERNAL_SECRET"]
+  },
+  "services": [
+    { "binding": "ACCESSHUB", "service": "accesshub" }
+  ],
+  "queues": {
+    "consumers": [
+      {
+        "queue": "accesshub-commerce-events",
+        "max_batch_size": 10,
+        "max_batch_timeout": 5,
+        "max_retries": 5,
+        "retry_delay": 30,
+        "dead_letter_queue": "accesshub-commerce-events-dlq",
+        "max_concurrency": 5
+      }
+    ]
+  },
+  "workflows": [
+    {
+      "name": "accesshub-order-fulfillment",
+      "binding": "ORDER_FULFILLMENT",
+      "class_name": "OrderFulfillmentWorkflow"
+    },
+    {
+      "name": "accesshub-subscription-period",
+      "binding": "SUBSCRIPTION_PERIOD",
+      "class_name": "SubscriptionPeriodWorkflow"
+    }
+  ],
+  "triggers": {
+    "crons": ["*/15 * * * *"]
+  }
+}

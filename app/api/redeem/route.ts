@@ -7,6 +7,7 @@ import { activityLogs, creditGrants, creditTransactions, orders, planEntitlement
 import { headers } from 'next/headers'
 import { entitlementExpiresAt, type EntitlementUnit } from '@/lib/entitlements'
 import { transitionSubscription } from '@/lib/subscription-service'
+import { dispatchPendingCommerceEvents, enqueueSubscriptionPeriod } from '@/lib/commerce-orchestration'
 
 export async function POST(request: Request) {
   const session = await auth.api.getSession({ headers: await headers() })
@@ -15,13 +16,13 @@ export async function POST(request: Request) {
   const code = String(body.code || '').trim().toUpperCase()
   if (!code) return NextResponse.json({ error: '请输入兑换码' }, { status: 400 })
   const now = new Date()
-  return db.transaction(async (tx) => {
+  const result = await db.transaction(async (tx) => {
     const [item] = await tx
       .update(redeemCodes)
       .set({ redeemedAt: now, redeemedBy: session.user.id })
       .where(and(eq(redeemCodes.code, code), isNull(redeemCodes.redeemedAt), or(isNull(redeemCodes.expiresAt), gt(redeemCodes.expiresAt, now))))
       .returning({ id: redeemCodes.id, kind: redeemCodes.kind, planId: redeemCodes.planId, credits: redeemCodes.credits, durationValue: redeemCodes.durationValue, durationUnit: redeemCodes.durationUnit, orderId: redeemCodes.orderId, subscriptionId: redeemCodes.subscriptionId })
-    if (!item) return NextResponse.json({ error: '兑换码无效、已核销或已过期' }, { status: 400 })
+    if (!item) return { status: 400, body: { error: '兑换码无效、已核销或已过期' }, outboxEventId: null }
 
     const expiresAt = entitlementExpiresAt(now, item.durationValue, item.durationUnit as EntitlementUnit)
     if (item.kind === 'credits') {
@@ -30,7 +31,7 @@ export async function POST(request: Request) {
       await tx.insert(creditGrants).values({ id: grantId, userId: session.user.id, credits: item.credits, remainingCredits: item.credits, expiresAt, source: 'redeem', redeemCodeId: item.id })
       await tx.insert(creditTransactions).values({ id: randomUUID(), userId: session.user.id, creditGrantId: grantId, delta: item.credits, balanceAfter: item.credits, reason: 'redeem', referenceId: item.id })
       await tx.insert(activityLogs).values({ id: randomUUID(), actorId: session.user.id, action: 'code.redeemed', resourceType: 'redeem_code', resourceId: item.id, detail: `${item.credits} credits` })
-      return NextResponse.json({ ok: true, kind: 'credits', credits: item.credits, expiresAt: expiresAt?.toISOString() ?? null })
+      return { status: 200, body: { ok: true, kind: 'credits', credits: item.credits, expiresAt: expiresAt?.toISOString() ?? null }, outboxEventId: null }
     }
 
     if (!item.planId) throw new Error('plan redeem code has no subscription plan')
@@ -43,8 +44,15 @@ export async function POST(request: Request) {
       await tx.insert(planEntitlements).values({ id: randomUUID(), userId: session.user.id, planId: item.planId, subscriptionId, startsAt: now, expiresAt, source: 'subscription' })
     }
     if (item.orderId) await tx.update(orders).set({ userId: session.user.id, updatedAt: now }).where(and(eq(orders.id, item.orderId), isNull(orders.userId)))
+    const outboxEventId = expiresAt ? await enqueueSubscriptionPeriod(tx, { subscriptionId, periodEnd: expiresAt }) : null
     await tx.insert(activityLogs).values({ id: randomUUID(), actorId: session.user.id, action: 'code.redeemed', resourceType: 'redeem_code', resourceId: item.id, detail: `plan:${item.planId}` })
     const [plan] = await tx.select({ name: subscriptionPlans.name }).from(subscriptionPlans).where(eq(subscriptionPlans.id, item.planId)).limit(1)
-    return NextResponse.json({ ok: true, kind: 'plan', plan: plan?.name, expiresAt: expiresAt?.toISOString() ?? null })
+    return { status: 200, body: { ok: true, kind: 'plan', plan: plan?.name, expiresAt: expiresAt?.toISOString() ?? null }, outboxEventId }
   })
+  if (result.outboxEventId) {
+    await dispatchPendingCommerceEvents({ ids: [result.outboxEventId], limit: 1 }).catch((error) => {
+      console.error(JSON.stringify({ event: 'subscription.outbox.dispatch_failed', error: error instanceof Error ? error.message : String(error) }))
+    })
+  }
+  return NextResponse.json(result.body, { status: result.status })
 }

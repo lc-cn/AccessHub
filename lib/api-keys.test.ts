@@ -12,13 +12,12 @@ test('generates an opaque API key and stores only its hash', () => {
   assert.match(first.prefix, /^ahk_.+…$/)
 })
 
-test('validates API key lifetime and service scopes', () => {
-  const parsed = parseApiKeyCreateInput({ name: '生产服务', expiresInDays: 90, serviceScopes: ['qsign', 'qsign'] }, ['qsign'])
+test('validates API key lifetime without accepting a service authorization scope', () => {
+  const parsed = parseApiKeyCreateInput({ name: '生产服务', expiresInDays: 90, serviceScopes: ['qsign'] })
   assert.equal(parsed.ok, true)
   if (parsed.ok) {
-    assert.deepEqual(parsed.value.serviceScopes, ['qsign'])
+    assert.equal('serviceScopes' in parsed.value, false)
     assert.ok(parsed.value.expiresAt instanceof Date)
   }
-  assert.deepEqual(parseApiKeyCreateInput({ name: 'bad', expiresInDays: 7, serviceScopes: ['*'] }, ['qsign']), { ok: false, error: '请选择有效的到期时间' })
-  assert.deepEqual(parseApiKeyCreateInput({ name: 'bad', expiresInDays: -1, serviceScopes: ['unknown'] }, ['qsign']), { ok: false, error: '包含无效的服务范围' })
+  assert.deepEqual(parseApiKeyCreateInput({ name: 'bad', expiresInDays: 7 }), { ok: false, error: '请选择有效的到期时间' })
 })

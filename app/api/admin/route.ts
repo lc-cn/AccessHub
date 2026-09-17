@@ -82,7 +82,22 @@ export async function GET(request: Request) {
     const [subscriptionRows, paymentRows, eventRows] = await Promise.all([
       wants('subscriptions') ? db.select({ id: subscriptions.id, userId: subscriptions.userId, userName: user.name, planId: subscriptions.planId, planName: subscriptionPlans.name, skuId: subscriptions.skuId, skuCode: skus.code, providerId: subscriptions.providerId, status: subscriptions.status, currentPeriodStart: subscriptions.currentPeriodStart, currentPeriodEnd: subscriptions.currentPeriodEnd, cancelAtPeriodEnd: subscriptions.cancelAtPeriodEnd, createdAt: subscriptions.createdAt, updatedAt: subscriptions.updatedAt }).from(subscriptions).innerJoin(subscriptionPlans, eq(subscriptionPlans.id, subscriptions.planId)).leftJoin(skus, eq(skus.id, subscriptions.skuId)).leftJoin(user, eq(user.id, subscriptions.userId)).orderBy(desc(subscriptions.updatedAt)).limit(500) : Promise.resolve([]),
       wants('payments') ? db.select({ id: payments.id, orderId: payments.orderId, providerId: payments.providerId, externalPaymentId: payments.externalPaymentId, status: payments.status, amount: payments.amount, currency: payments.currency, paidAt: payments.paidAt, createdAt: payments.createdAt }).from(payments).orderBy(desc(payments.createdAt)).limit(500) : Promise.resolve([]),
-      wants('logs', 'afdian-events') ? db.select({ id: providerEvents.id, providerId: providerEvents.providerId, externalEventId: providerEvents.externalEventId, type: providerEvents.type, status: providerEvents.status, error: providerEvents.error, processedAt: providerEvents.processedAt, createdAt: providerEvents.createdAt }).from(providerEvents).where(section === 'afdian-events' ? eq(providerEvents.providerId, 'psp-afdian') : undefined).orderBy(desc(providerEvents.createdAt)).limit(500) : Promise.resolve([]),
+      wants('logs', 'afdian-events', 'orders', 'afdian-orders') ? db.select({
+        id: providerEvents.id,
+        providerId: providerEvents.providerId,
+        externalEventId: providerEvents.externalEventId,
+        type: providerEvents.type,
+        status: providerEvents.status,
+        error: providerEvents.error,
+        attemptCount: providerEvents.attemptCount,
+        queuedAt: providerEvents.queuedAt,
+        processingStartedAt: providerEvents.processingStartedAt,
+        nextAttemptAt: providerEvents.nextAttemptAt,
+        workflowInstanceId: providerEvents.workflowInstanceId,
+        processedAt: providerEvents.processedAt,
+        createdAt: providerEvents.createdAt,
+        updatedAt: providerEvents.updatedAt,
+      }).from(providerEvents).where(section === 'afdian-events' ? eq(providerEvents.providerId, 'psp-afdian') : undefined).orderBy(desc(providerEvents.createdAt)).limit(500) : Promise.resolve([]),
     ])
     const [serviceRows, serviceApiRows, permissionRows, permissionGrantRows] = await Promise.all([
       wants('services', 'permissions') ? db.select({ id: apiServices.id, code: apiServices.code, name: apiServices.name, description: apiServices.description, transport: apiServices.transport, bindingName: apiServices.bindingName, baseUrl: apiServices.baseUrl, authType: apiServices.authType, authConfigEncrypted: apiServices.authConfigEncrypted, requiredPermissionId: apiServices.requiredPermissionId, requiredPermissionCode: permissionDefinitions.code, requiredPermissionName: permissionDefinitions.name, enabled: apiServices.enabled, createdAt: apiServices.createdAt, updatedAt: apiServices.updatedAt }).from(apiServices).leftJoin(permissionDefinitions, eq(permissionDefinitions.id, apiServices.requiredPermissionId)).orderBy(desc(apiServices.updatedAt)) : Promise.resolve([]),
@@ -91,7 +106,11 @@ export async function GET(request: Request) {
       wants('services', 'permissions') ? db.select({ permissionId: planPermissionGrants.permissionId, planId: planPermissionGrants.planId }).from(planPermissionGrants) : Promise.resolve([]),
     ])
     const permissionCatalog = permissionRows.map((permission) => ({ ...permission, planIds: permissionGrantRows.filter((grant) => grant.permissionId === permission.id).map((grant) => grant.planId), serviceCount: serviceRows.filter((service) => service.requiredPermissionId === permission.id).length }))
-    const fulfilledOrders = orderRows.filter((order) => section !== 'afdian-orders' || order.providerId === 'psp-afdian').map((order) => ({ ...order, codes: orderCodes.filter((code) => code.orderId === order.id) }))
+    const fulfilledOrders = orderRows.filter((order) => section !== 'afdian-orders' || order.providerId === 'psp-afdian').map((order) => ({
+      ...order,
+      codes: orderCodes.filter((code) => code.orderId === order.id),
+      providerEvent: eventRows.find((event) => event.providerId === order.providerId && event.externalEventId === order.externalOrderId) ?? null,
+    }))
     return NextResponse.json({ plans, codes, afdianMappings: mappings, orders: fulfilledOrders, skus: skuRows, users, logs, subscriptions: subscriptionRows, payments: paymentRows, providerEvents: eventRows, services: serviceRows.map((service) => ({ ...serializeApiService(service), apis: serviceApiRows.filter((api) => api.serviceId === service.id) })), permissions: permissionCatalog, workerBindings: wants('services') ? workerServiceBindings : [], afadianWebhookConfigured: Boolean(process.env.AFDIAN_WEBHOOK_SECRET), afadianMessengerConfigured: Boolean(process.env.AFDIAN_USER_ID && process.env.AFDIAN_ADMIN_TOKEN) })
   })
 }

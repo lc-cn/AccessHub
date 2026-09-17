@@ -15,7 +15,7 @@ type Context = { params: Promise<{ service: string; api: string }> }
 
 async function gateway(request: Request, context: Context) {
   const { service: serviceCode, api: apiCode } = await context.params
-  const principal = await authenticateGatewayRequest(request, serviceCode)
+  const principal = await authenticateGatewayRequest(request)
   if (!principal) return NextResponse.json({ error: 'unauthorized' }, { status: 401, headers: { 'www-authenticate': 'Bearer' } })
   const [target] = await db.select({
     transport: apiServices.transport, bindingName: apiServices.bindingName,
@@ -68,9 +68,9 @@ async function gateway(request: Request, context: Context) {
   }
 }
 
-async function authenticateGatewayRequest(request: Request, serviceCode: string) {
+async function authenticateGatewayRequest(request: Request) {
   const authorization = request.headers.get('authorization')
-  if (authorization?.startsWith('Bearer ')) return authenticateApiKey(authorization.slice(7).trim(), serviceCode)
+  if (authorization?.startsWith('Bearer ')) return authenticateApiKey(authorization.slice(7).trim())
   const session = await auth.api.getSession({ headers: request.headers })
   return session?.user ? { userId: session.user.id, apiKeyId: null } : null
 }

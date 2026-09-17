@@ -1,13 +1,12 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { ApiKeyManager, type ApiKeyItem, type ServiceOption } from '@/components/account/api-key-manager'
+import { ApiKeyManager, type ApiKeyItem } from '@/components/account/api-key-manager'
 import { requestJson } from '@/lib/http-client'
 import { WorkspaceSkeleton } from './workspace-shell'
 
 type ApiKeyResponse = {
   apiKeys: ApiKeyItem[]
-  services: ServiceOption[]
 }
 
 export function ApiKeyManagement() {
@@ -24,5 +23,5 @@ export function ApiKeyManagement() {
 
   if (error) return <div role="alert" className="rounded-[20px] border border-rose-200 bg-rose-50 p-5 text-sm text-rose-700">{error}</div>
   if (!data) return <WorkspaceSkeleton/>
-  return <ApiKeyManager initialKeys={data.apiKeys} services={data.services}/>
+  return <ApiKeyManager initialKeys={data.apiKeys}/>
 }

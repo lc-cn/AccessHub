@@ -30,6 +30,7 @@ pnpm exec wrangler secret put SERVICE_CREDENTIALS_KEY --config dist/server/wrang
 pnpm exec wrangler secret put AFDIAN_WEBHOOK_SECRET --config dist/server/wrangler.json
 pnpm exec wrangler secret put AFDIAN_USER_ID --config dist/server/wrangler.json
 pnpm exec wrangler secret put AFDIAN_ADMIN_TOKEN --config dist/server/wrangler.json
+pnpm exec wrangler secret put COMMERCE_INTERNAL_SECRET --config dist/server/wrangler.json
 pnpm exec wrangler secret put AFDIAN_OAUTH_CLIENT_ID --config dist/server/wrangler.json
 pnpm exec wrangler secret put AFDIAN_OAUTH_CLIENT_SECRET --config dist/server/wrangler.json
 pnpm exec wrangler secret put SMTP_HOST --config dist/server/wrangler.json
@@ -44,7 +45,7 @@ Only set optional Afdian, OAuth, or SMTP values for features that are enabled. N
 
 ## 3. Apply the database migration
 
-Apply SQL files through `drizzle/0014_permissions.sql` to the existing PostgreSQL database before using the administration forms. Existing services are retained as `http` transports, and existing services remain open to all authenticated users until a required permission is selected.
+Apply SQL files through `drizzle/0015_commerce_orchestration.sql` to the existing PostgreSQL database before deploying the asynchronous commerce worker. Existing services are retained as `http` transports, and existing services remain open to all authenticated users until a required permission is selected.
 
 The first preview can use `DATABASE_URL` directly. For production, create a Hyperdrive configuration for the same database in the Cloudflare dashboard, uncomment the `HYPERDRIVE` block in `wrangler.jsonc`, and insert its configuration ID. AccessHub automatically prefers `HYPERDRIVE.connectionString` when the binding exists and falls back to `DATABASE_URL` otherwise.
 
@@ -80,7 +81,36 @@ The initial cached read model is the authenticated user-facing service/API catal
 
 Workers KV is eventually consistent, so cached catalogs may briefly show old descriptive data in another region after invalidation. Do not store sessions, API keys, entitlements, balances, usage, redemption state, webhook idempotency, administrator detail responses, or service credentials in KV. HTTP `Cache-Control` headers do not control Hyperdrive's SQL query cache or Workers KV.
 
-## 4. Declare private upstream Workers
+## 4. Configure commerce orchestration
+
+Commerce runs in the separate `accesshub-commerce` Worker. PostgreSQL remains the source of truth; Queue buffers provider events, while Workflows execute order fulfillment and subscription-period reconciliation.
+
+Create the primary queue and its dead-letter queue once:
+
+```bash
+pnpm exec wrangler queues create accesshub-commerce-events
+pnpm exec wrangler queues create accesshub-commerce-events-dlq
+```
+
+These commands use the account's default retention period. On a plan that supports longer retention, update it explicitly with `wrangler queues update <name> --message-retention-period-secs=<seconds>`.
+
+Generate one strong random `COMMERCE_INTERNAL_SECRET` locally, then enter the same value into both interactive prompts. Do not paste it into chat or commit it:
+
+```bash
+openssl rand -base64 48
+pnpm exec wrangler secret put COMMERCE_INTERNAL_SECRET --config dist/server/wrangler.json
+pnpm exec wrangler secret put COMMERCE_INTERNAL_SECRET --config wrangler.commerce.jsonc
+```
+
+The main `accesshub` Worker is only a Queue producer. The commerce Worker is the consumer and owns these durable processes:
+
+- `accesshub-order-fulfillment`: normalizes the provider event, creates the local order/payment/codes, then delivers the private message.
+- `accesshub-subscription-period`: sleeps until the redeemed subscription period ends, then rechecks the database before expiring it.
+- `*/15 * * * *`: republishes pending Outbox records and reconciles any subscription whose expiry job was missed.
+
+Queue and Workflow delivery are at-least-once. Database uniqueness constraints and deterministic Workflow IDs make order creation idempotent. A private-message timeout is recorded as `unknown` and is not blindly retried.
+
+## 5. Declare private upstream Workers
 
 Service Bindings are deployment configuration, so a database row alone cannot create one. Add every private upstream to `wrangler.jsonc`:
 
@@ -101,12 +131,14 @@ Binding names are normalized to uppercase. If an enabled database service refere
 
 The target Worker does not need a public route. It must expose a standard `fetch()` handler and be in a Cloudflare account where the binding can be configured.
 
-## 5. Build and deploy a preview
+## 6. Build and deploy a preview
 
 ```bash
 pnpm test
+pnpm typecheck
 pnpm build:vinext
 pnpm deploy:vinext
+pnpm deploy:commerce
 ```
 
 After changing bindings in `wrangler.jsonc`, rebuild before deploying because vinext generates the final Worker configuration in `dist/server/wrangler.json`.
@@ -117,10 +149,10 @@ Validate these paths on the `workers.dev` preview URL:
 2. Dashboard, account center, API-key creation, and default API-key retrieval.
 3. One free API and one billable API through both HTTP and Worker Binding transports.
 4. Upstream timeout/non-200 behavior and the rule that only HTTP 200 consumes usage.
-5. Redeem-code fulfillment, Afdian webhook idempotency, and private-message delivery.
+5. Redeem-code fulfillment, Afdian webhook idempotency, Queue/Workflow progress, DLQ behavior, and private-message delivery.
 6. Password reset and verification email. Workers blocks outbound TCP port 25; use SMTP 465 or 587 and verify the provider accepts Worker-originated connections.
 
-## 6. Cut over the production domain
+## 7. Cut over the production domain
 
 After preview acceptance:
 
