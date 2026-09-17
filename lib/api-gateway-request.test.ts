@@ -38,6 +38,12 @@ test('does not forward a gateway API key to an unauthenticated upstream', async 
   assert.deepEqual(result, { ok: false, error: 'Header authorization 由网关保留' })
 })
 
+test('never forwards the gateway key query parameter upstream', async () => {
+  const request = new Request('https://access.example/api/gateway/demo/chat?key=ahk_user-secret')
+  const result = await prepareUpstreamRequest(request, 'https://upstream.example', '/chat', [{ name: 'key', location: 'query', dataType: 'string', required: false, description: '' }], 'none', null)
+  assert.deepEqual(result, { ok: false, error: 'Query 参数 key 由网关保留' })
+})
+
 test('does not let request query parameters override service query authentication', async () => {
   const original = process.env.SERVICE_CREDENTIALS_KEY
   process.env.SERVICE_CREDENTIALS_KEY = 'test-only-service-credential-key-32-bytes'

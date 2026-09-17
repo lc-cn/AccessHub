@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { and, eq } from 'drizzle-orm'
 import { auth } from '@/lib/auth'
 import { authenticateApiKey } from '@/lib/api-keys'
+import { getGatewayApiKey } from '@/lib/gateway-auth'
 import type { ServiceAuthType, ServiceParameter, ServiceTransport } from '@/lib/api-services'
 import { prepareUpstreamRequest } from '@/lib/api-gateway-request'
 import { dispatchUpstreamRequest, UpstreamBindingUnavailableError } from '@/lib/upstream-transport'
@@ -69,8 +70,8 @@ async function gateway(request: Request, context: Context) {
 }
 
 async function authenticateGatewayRequest(request: Request) {
-  const authorization = request.headers.get('authorization')
-  if (authorization?.startsWith('Bearer ')) return authenticateApiKey(authorization.slice(7).trim())
+  const apiKey = getGatewayApiKey(request)
+  if (apiKey) return authenticateApiKey(apiKey)
   const session = await auth.api.getSession({ headers: request.headers })
   return session?.user ? { userId: session.user.id, apiKeyId: null } : null
 }

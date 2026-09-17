@@ -28,6 +28,7 @@ test('validates an endpoint and its request parameters', () => {
   assert.equal(parseServiceApiInput({ code: 'user', name: 'User', path: '/users/{id}', method: 'GET', usageUnits: 1, parameters: [{ name: 'id', location: 'path', dataType: 'string', required: true }] }).ok, true)
   assert.equal(parseServiceApiInput({ code: 'health', name: 'Health', path: '/health', method: 'GET', usageUnits: 0, parameters: [] }).ok, true)
   assert.deepEqual(parseServiceApiInput({ code: 'invalid', name: 'Invalid', path: '/invalid', method: 'GET', usageUnits: -1, parameters: [] }), { ok: false, error: '单次计费次数必须是 0–10000 的整数；0 表示免费调用' })
+  assert.deepEqual(parseServiceApiInput({ code: 'reserved', name: 'Reserved', path: '/reserved', method: 'GET', usageUnits: 1, parameters: [{ name: 'KEY', location: 'query', dataType: 'string' }] }), { ok: false, error: 'Query 参数 key 由 AccessHub 网关保留' })
 })
 
 test('encrypts service credentials and materializes auth headers', () => {

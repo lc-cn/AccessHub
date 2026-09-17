@@ -1,4 +1,5 @@
 import { applyServiceQueryAuth, joinServiceUrl, serviceAuthHeaders, type ServiceAuthType, type ServiceParameter } from './api-services.ts'
+import { GATEWAY_API_KEY_QUERY_PARAM } from './gateway-auth.ts'
 
 export async function prepareUpstreamRequest(request: Request, baseUrl: string, path: string, parameters: ServiceParameter[], authType: ServiceAuthType, encryptedAuth: string | null) {
   try {
@@ -34,6 +35,7 @@ export async function prepareUpstreamRequest(request: Request, baseUrl: string, 
         if (['authorization', 'host', 'cookie', 'set-cookie', 'connection', 'content-length', 'transfer-encoding'].includes(normalized) || outboundHeaders.has(parameter.name)) return { ok: false, error: `Header ${parameter.name} 由网关保留` } as const
         outboundHeaders.set(parameter.name, String(raw))
       } else if (parameter.location === 'query') {
+        if (parameter.name.toLowerCase() === GATEWAY_API_KEY_QUERY_PARAM) return { ok: false, error: `Query 参数 ${parameter.name} 由网关保留` } as const
         if (target.searchParams.has(parameter.name)) return { ok: false, error: `Query 参数 ${parameter.name} 由网关保留` } as const
         target.searchParams.append(parameter.name, String(raw))
       }

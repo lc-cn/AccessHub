@@ -8,16 +8,16 @@ AccessHub 是面向 API 服务提供者的可自行部署的管理平台。管�
 
 ## 能做什么
 
-| 能力 | 当前实现 |
-| --- | --- |
-| 服务接入 | 管理上游服务与接口、请求参数白名单；支持 HTTP 上游和 Cloudflare Worker Service Binding |
-| 统一网关 | 服务端注入 Bearer、Header、Query 或 Basic Auth 凭据，统一校验用户权限 |
-| API Key | 默认 Key、自定义 Key、撤销、浏览器测试控制台；自定义 Key 仅创建时返回明文 |
-| 权限与配额 | 服务权限、计划阶梯、分钟限速、日/周/月配额及 Credits 额度回落 |
-| 商品与权益 | 本地 SKU、订单、支付记录、订阅、兑换码与权益核销 |
-| 爱发电适配 | 商品映射、付款事件去重、兑换码履约及私信交付 |
-| 异步运维 | 独立 Commerce Worker、Queue、Workflows、事务 Outbox、死信查看与人工重放 |
-| 用户账号 | GitHub 登录、可选 OIDC 登录、邮件登录、Passkey、多因素认证及会话管理 |
+| 能力       | 当前实现                                                                               |
+| ---------- | -------------------------------------------------------------------------------------- |
+| 服务接入   | 管理上游服务与接口、请求参数白名单；支持 HTTP 上游和 Cloudflare Worker Service Binding |
+| 统一网关   | 服务端注入 Bearer、Header、Query 或 Basic Auth 凭据，统一校验用户权限                  |
+| API Key    | 默认 Key、自定义 Key、撤销、浏览器测试控制台；自定义 Key 仅创建时返回明文              |
+| 权限与配额 | 服务权限、计划阶梯、分钟限速、日/周/月配额及 Credits 额度回落                          |
+| 商品与权益 | 本地 SKU、订单、支付记录、订阅、兑换码与权益核销                                       |
+| 爱发电适配 | 商品映射、付款事件去重、兑换码履约及私信交付                                           |
+| 异步运维   | 独立 Commerce Worker、Queue、Workflows、事务 Outbox、死信查看与人工重放                |
+| 用户账号   | GitHub 登录、可选 OIDC 登录、邮件登录、Passkey、多因素认证及会话管理                   |
 
 支付平台提供付款事实，AccessHub 维护本地订单、订阅与最终 API 权益。当前已接入的支付适配器是爱发电；领域模型中出现其他支付平台名称，不代表已经实现其适配器。
 
@@ -44,7 +44,7 @@ curl https://your-accesshub.example/api/gateway/service-code/api-code \
 
 ## 与 ProfileHub 一起使用
 
-[ProfileHub](https://profile.l2cl.link) 是配套的身份与权限管理项目（[源码](https://github.com/lc-cn/ProfileHub)）。AccessHub 可通过 Better Auth Generic OAuth 接入 ProfileHub，使用 PKCE、Discovery 和 JWKS 验证身份，然后建立自己的会话。
+[ProfileHub](https://github.com/lc-cn/ProfileHub) 是配套的身份与权限管理项目。AccessHub 可通过 Better Auth Generic OAuth 接入 ProfileHub，使用 PKCE、Discovery 和 JWKS 验证身份，然后建立自己的会话。
 
 两个项目可以独立使用。接入 ProfileHub 不会自动同步其组织角色，也不会自动赋予 AccessHub 的 API 权限或订阅权益。配置方式见 [OIDC 接入指南](docs/profilehub-oidc.md)。
 
@@ -79,7 +79,7 @@ GitHub 登录回调为 `http://localhost:3000/api/auth/callback/github`。数据
 pnpm dev
 ```
 
-打开 <http://localhost:3000>。当前管理员引导逻辑会在不存在管理员时，将首次通过管理员权限检查的已登录用户提升为管理员；首次部署应在受控环境中完成该步骤，再开放注册与访问。
+打开 [http://localhost:3000](http://localhost:3000)。当前管理员引导逻辑会在不存在管理员时，将首次通过管理员权限检查的已登录用户提升为管理员；首次部署应在受控环境中完成该步骤，再开放注册与访问。
 
 ### 按需启用
 
@@ -106,14 +106,14 @@ pnpm dev
 
 ## 开发与贡献
 
-| 命令 | 用途 |
-| --- | --- |
-| `pnpm dev` | Next.js 本地开发 |
-| `pnpm build` | Next.js 生产构建 |
-| `pnpm dev:vinext` | Cloudflare 开发入口 |
-| `pnpm build:vinext` | 构建 Web Worker |
-| `pnpm test` | 业务及 Commerce Worker 测试 |
-| `pnpm typecheck` | 类型生成、检查及 vinext 构建 |
+| 命令                  | 用途                         |
+| --------------------- | ---------------------------- |
+| `pnpm dev`          | Next.js 本地开发             |
+| `pnpm build`        | Next.js 生产构建             |
+| `pnpm dev:vinext`   | Cloudflare 开发入口          |
+| `pnpm build:vinext` | 构建 Web Worker              |
+| `pnpm test`         | 业务及 Commerce Worker 测试  |
+| `pnpm typecheck`    | 类型生成、检查及 vinext 构建 |
 
 页面与接口位于 `app/`，核心业务规则位于 `lib/`，异步商业流程位于 `workers/commerce/`，数据库迁移位于 `drizzle/`。
 

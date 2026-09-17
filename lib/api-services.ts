@@ -1,5 +1,6 @@
 import { createCipheriv, createDecipheriv, randomBytes, createHash } from 'node:crypto'
 import { isIP } from 'node:net'
+import { GATEWAY_API_KEY_QUERY_PARAM } from './gateway-auth.ts'
 
 export const serviceAuthTypes = ['none', 'bearer', 'header', 'query', 'basic'] as const
 export const serviceTransportTypes = ['http', 'worker_binding'] as const
@@ -51,6 +52,7 @@ export function parseServiceApiInput(body: Record<string, unknown>) {
   if (!Number.isSafeInteger(usageUnits) || usageUnits < 0 || usageUnits > 10000) return { ok: false, error: '单次计费次数必须是 0–10000 的整数；0 表示免费调用' } as const
   if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1000 || timeoutMs > 120000) return { ok: false, error: '超时时间必须在 1000–120000 毫秒之间' } as const
   if (!parameters.ok) return parameters
+  if (parameters.value.some((item) => item.location === 'query' && item.name.toLowerCase() === GATEWAY_API_KEY_QUERY_PARAM)) return { ok: false, error: `Query 参数 ${GATEWAY_API_KEY_QUERY_PARAM} 由 AccessHub 网关保留` } as const
   if (method === 'GET' && parameters.value.some((item) => item.location === 'body')) return { ok: false, error: 'GET API 不能配置 Body 参数' } as const
   const pathParameters = parameters.value.filter((item) => item.location === 'path')
   if (pathParameters.some((item) => !item.required)) return { ok: false, error: 'Path 参数必须设为必填' } as const
