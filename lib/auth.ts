@@ -1,5 +1,5 @@
 import { betterAuth } from 'better-auth'
-import { getRbacOAuthConfig } from '@/lib/rbac-oauth'
+import { getProfileHubOAuthConfig } from '@/lib/profilehub-oauth'
 import type { GenericOAuthConfig } from 'better-auth/plugins/generic-oauth'
 import { drizzleAdapter } from 'better-auth/adapters/drizzle'
 import { emailOTP, genericOAuth, twoFactor } from 'better-auth/plugins'
@@ -27,7 +27,7 @@ const accountAuthPolicy = getAccountAuthPolicy()
 const emailReady = accountAuthPolicy.emailEnabled
 const baseURL = process.env.BETTER_AUTH_URL || (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : process.env.V0_RUNTIME_URL || 'http://localhost:3000')
 const relyingParty = new URL(baseURL)
-const rbacOAuth = getRbacOAuthConfig()
+const profileHubOAuth = getProfileHubOAuthConfig()
 
 return betterAuth({
   database: drizzleAdapter(db, { provider: 'pg', schema: allTables }),
@@ -108,8 +108,8 @@ return betterAuth({
       ...(emailReady ? { otpOptions: { async sendOTP({ user, otp }) { await sendSecurityCode(user.email, otp, 'mfa') } } } : {}),
     }),
     strongAuthenticationPlugin(),
-    ...((isAfdianOAuthConfigured() || rbacOAuth) ? [genericOAuth({ config: [
-    ...(rbacOAuth ? [rbacOAuth] : []),
+    ...((isAfdianOAuthConfigured() || profileHubOAuth) ? [genericOAuth({ config: [
+    ...(profileHubOAuth ? [profileHubOAuth] : []),
     ...(isAfdianOAuthConfigured() ? [{
     providerId: AFDIAN_PROVIDER_ID,
     name: '爱发电',

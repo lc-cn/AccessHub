@@ -4,7 +4,7 @@
 
 AccessHub 是面向 API 服务提供者的可自行部署的管理平台。管理员配置上游服务、接口和访问规则，用户在工作台获取 API Key、查看权益并测试接口；请求经过统一网关进行身份校验、权限检查、配额预留和用量结算。
 
-[部署文档](docs/cloudflare-deployment.md) · [身份接入](docs/rbac-oidc.md) · [领域模型](CONTEXT.md) · [Issues](https://github.com/lc-cn/AccessHub/issues) · [Apache-2.0](LICENSE)
+[部署文档](docs/cloudflare-deployment.md) · [身份接入](docs/profilehub-oidc.md) · [领域模型](CONTEXT.md) · [Issues](https://github.com/lc-cn/AccessHub/issues) · [Apache-2.0](LICENSE)
 
 ## 能做什么
 
@@ -44,9 +44,9 @@ curl https://your-accesshub.example/api/gateway/service-code/api-code \
 
 ## 与 ProfileHub 一起使用
 
-[ProfileHub](https://github.com/lc-cn/ProfileHub) 是配套的身份与权限管理项目。AccessHub 可通过 Better Auth Generic OAuth 接入 ProfileHub，使用 PKCE、Discovery 和 JWKS 验证身份，然后建立自己的会话。
+[ProfileHub](https://profile.l2cl.link) 是配套的身份与权限管理项目（[源码](https://github.com/lc-cn/ProfileHub)）。AccessHub 可通过 Better Auth Generic OAuth 接入 ProfileHub，使用 PKCE、Discovery 和 JWKS 验证身份，然后建立自己的会话。
 
-两个项目可以独立使用。接入 ProfileHub 不会自动同步其组织角色，也不会自动赋予 AccessHub 的 API 权限或订阅权益。配置方式见 [OIDC 接入指南](docs/rbac-oidc.md)。
+两个项目可以独立使用。接入 ProfileHub 不会自动同步其组织角色，也不会自动赋予 AccessHub 的 API 权限或订阅权益。配置方式见 [OIDC 接入指南](docs/profilehub-oidc.md)。
 
 ## 本地开发
 
@@ -84,7 +84,7 @@ pnpm dev
 ### 按需启用
 
 - **邮件登录与找回密码**：配置完整的 SMTP 参数后启用，见 [邮件部署](docs/smtp-deployment.md)。
-- **ProfileHub 登录**：配置 `RBAC_ISSUER_URL`、`RBAC_CLIENT_ID`、`RBAC_CLIENT_SECRET`，见 [身份接入](docs/rbac-oidc.md)。
+- **ProfileHub 登录**：配置 `PROFILEHUB_ISSUER_URL`、`PROFILEHUB_CLIENT_ID`、`PROFILEHUB_CLIENT_SECRET`，见 [身份接入](docs/profilehub-oidc.md)。
 - **爱发电账号绑定与履约**：需要自己的 OAuth 应用、创作者凭据、Webhook Secret 和商品映射；异步履约还依赖下述 Commerce Worker。
 
 `SERVICE_CREDENTIALS_KEY` 用于加密上游凭据及可供测试控制台读取的默认 API Key。应稳定保存，直接替换会使现有密文无法解密。环境文件及任何真实凭据均不应提交到仓库。

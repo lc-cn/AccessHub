@@ -33,6 +33,9 @@ pnpm exec wrangler secret put AFDIAN_ADMIN_TOKEN --config dist/server/wrangler.j
 pnpm exec wrangler secret put COMMERCE_INTERNAL_SECRET --config dist/server/wrangler.json
 pnpm exec wrangler secret put AFDIAN_OAUTH_CLIENT_ID --config dist/server/wrangler.json
 pnpm exec wrangler secret put AFDIAN_OAUTH_CLIENT_SECRET --config dist/server/wrangler.json
+pnpm exec wrangler secret put PROFILEHUB_ISSUER_URL --config dist/server/wrangler.json
+pnpm exec wrangler secret put PROFILEHUB_CLIENT_ID --config dist/server/wrangler.json
+pnpm exec wrangler secret put PROFILEHUB_CLIENT_SECRET --config dist/server/wrangler.json
 pnpm exec wrangler secret put SMTP_HOST --config dist/server/wrangler.json
 pnpm exec wrangler secret put SMTP_FROM --config dist/server/wrangler.json
 pnpm exec wrangler secret put SMTP_USER --config dist/server/wrangler.json

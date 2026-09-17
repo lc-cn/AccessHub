@@ -16,7 +16,7 @@ import {
 import { authClient } from "@/lib/auth-client";
 import { useCodeSendCooldown } from "@/lib/use-code-send-cooldown";
 
-export default function LoginForm({ rbacEnabled }: { rbacEnabled: boolean }) {
+export default function LoginForm({ profileHubEnabled }: { profileHubEnabled: boolean }) {
   const [pending, setPending] = useState<
     | "rbac"
     | "github"
@@ -52,7 +52,7 @@ export default function LoginForm({ rbacEnabled }: { rbacEnabled: boolean }) {
     if (result?.error) {
       setError(
         provider === "rbac"
-          ? "统一账号登录暂时不可用，请稍后重试。"
+          ? "ProfileHub 登录暂时不可用，请稍后重试。"
           : provider === "afdian"
           ? "爱发电登录暂时不可用；首次使用请先通过 GitHub 登录并绑定。"
           : "GitHub 登录暂时不可用，请稍后重试。",
@@ -181,7 +181,7 @@ export default function LoginForm({ rbacEnabled }: { rbacEnabled: boolean }) {
           </div>
         </div>
         <p className="relative text-xs text-slate-500">
-          AccessHub 使用 GitHub 验证账户身份
+          AccessHub 支持 ProfileHub、Passkey 与邮箱登录
         </p>
       </section>
 
@@ -203,14 +203,14 @@ export default function LoginForm({ rbacEnabled }: { rbacEnabled: boolean }) {
             使用 Passkey、邮箱验证码或已绑定的第三方账户登录。
           </p>
           <div className="mt-9 space-y-3">
-            {rbacEnabled && (
+            {profileHubEnabled && (
               <button
                 onClick={() => void signIn("rbac")}
                 disabled={pending !== null}
                 className="flex h-12 w-full items-center justify-center gap-3 rounded-xl border border-slate-200 bg-white text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
               >
                 <KeyRound size={18} />
-                {pending === "rbac" ? "正在跳转…" : "使用统一账号登录"}
+                {pending === "rbac" ? "正在跳转…" : "使用 ProfileHub 登录"}
               </button>
             )}
             <button

@@ -1,6 +1,6 @@
-import { getRbacOAuthConfig } from '@/lib/rbac-oauth'
+import { getProfileHubOAuthConfig } from '@/lib/profilehub-oauth'
 import LoginForm from './login-form'
 
 export default function LoginPage() {
-  return <LoginForm rbacEnabled={getRbacOAuthConfig() !== null} />
+  return <LoginForm profileHubEnabled={getProfileHubOAuthConfig() !== null} />
 }
