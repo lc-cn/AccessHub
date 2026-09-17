@@ -14,5 +14,6 @@ export async function proxyProfileHubRequest(
   const url = new URL(request.url)
   const allowedMethods = url.origin === PROFILEHUB_ORIGIN ? ALLOWED_ENDPOINTS.get(url.pathname) : undefined
   if (!allowedMethods?.has(request.method)) return new Response('Not found', { status: 404 })
+  console.info('[profilehub-egress] forwarding allowlisted request', { method: request.method, pathname: url.pathname })
   return upstreamFetch(request)
 }

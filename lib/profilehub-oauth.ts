@@ -15,15 +15,24 @@ export function createProfileHubFetchRouter(
   const issuerOrigin = new URL(issuer).origin
   return (async (input: RequestInfo | URL, init?: RequestInit) => {
     const request = input instanceof Request && init === undefined ? input : new Request(input, init)
-    if (new URL(request.url).origin === issuerOrigin) return binding.fetch(request)
+    if (new URL(request.url).origin === issuerOrigin) {
+      console.info('[profilehub-oauth] routed request through service binding', { method: request.method })
+      return binding.fetch(request)
+    }
     return fallback(input, init)
   }) as typeof fetch
 }
 
 export function installProfileHubFetchRouter(issuer: string, binding: FetchBinding | null): void {
-  if (!binding || profileHubTransportInstalled) return
-  globalThis.fetch = createProfileHubFetchRouter(issuer, binding, globalThis.fetch.bind(globalThis))
+  if (!binding) {
+    console.error('[profilehub-oauth] service binding is unavailable')
+    return
+  }
+  if (profileHubTransportInstalled) return
+  const routedFetch = createProfileHubFetchRouter(issuer, binding, globalThis.fetch.bind(globalThis))
+  globalThis.fetch = routedFetch
   profileHubTransportInstalled = true
+  console.info('[profilehub-oauth] fetch router installed', { installed: globalThis.fetch === routedFetch })
 }
 
 export function getProfileHubOAuthConfig(env: Record<string, string | undefined> = process.env): GenericOAuthConfig | null {
