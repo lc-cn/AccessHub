@@ -12,6 +12,7 @@ import {
   Zap,
 } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
+import { useCodeSendCooldown } from "@/lib/use-code-send-cooldown";
 
 export default function RegisterPage() {
   const [step, setStep] = useState<"account" | "verify">("account");
@@ -25,6 +26,7 @@ export default function RegisterPage() {
     tone: "info" | "error";
     text: string;
   } | null>(null);
+  const otpCooldown = useCodeSendCooldown("email-verification");
 
   const createAccount = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -46,11 +48,13 @@ export default function RegisterPage() {
         tone: "error",
         text: result.error.message || "注册失败，请稍后重试。",
       });
+    otpCooldown.startCooldown();
     setStep("verify");
     setMessage({ tone: "info", text: "验证码已发送，有效期 10 分钟。" });
   };
 
   const resend = async () => {
+    if (otpCooldown.isCoolingDown) return;
     setPending("resend");
     setMessage(null);
     const result = await authClient.emailOtp.sendVerificationOtp({
@@ -58,6 +62,7 @@ export default function RegisterPage() {
       type: "email-verification",
     });
     setPending("");
+    if (!result.error) otpCooldown.startCooldown();
     setMessage(
       result.error
         ? { tone: "error", text: "验证码发送失败，请稍后重试。" }
@@ -239,11 +244,15 @@ export default function RegisterPage() {
                   </button>
                   <button
                     type="button"
-                    disabled={pending !== ""}
+                    disabled={pending !== "" || otpCooldown.isCoolingDown}
                     onClick={() => void resend()}
                     className="font-medium text-[#3157d5] disabled:opacity-50"
                   >
-                    {pending === "resend" ? "发送中…" : "重新发送验证码"}
+                    {pending === "resend"
+                      ? "发送中…"
+                      : otpCooldown.isCoolingDown
+                        ? `${otpCooldown.remainingSeconds} 秒后重发`
+                        : "重新发送验证码"}
                   </button>
                 </div>
               </form>

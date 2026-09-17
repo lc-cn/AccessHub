@@ -11,25 +11,37 @@ function secondsUntil(endsAt: number) {
 
 export function useCodeSendCooldown(key: string, durationSeconds = DEFAULT_COOLDOWN_SECONDS) {
   const storageKey = `${STORAGE_PREFIX}${key}`
+  const [endsAt, setEndsAt] = useState(0)
   const [remainingSeconds, setRemainingSeconds] = useState(0)
 
   useEffect(() => {
-    const storedEndsAt = Number(window.localStorage.getItem(storageKey))
+    try {
+      const storedEndsAt = Number(window.localStorage.getItem(storageKey))
+      setEndsAt(Number.isFinite(storedEndsAt) && storedEndsAt > Date.now() ? storedEndsAt : 0)
+    } catch {
+      setEndsAt(0)
+    }
+  }, [storageKey])
+
+  useEffect(() => {
     const update = () => {
-      const remaining = Number.isFinite(storedEndsAt) ? secondsUntil(storedEndsAt) : 0
+      const remaining = secondsUntil(endsAt)
       setRemainingSeconds(remaining)
-      if (remaining === 0) window.localStorage.removeItem(storageKey)
+      if (remaining === 0) {
+        try { window.localStorage.removeItem(storageKey) } catch { /* Storage is an optional persistence enhancement. */ }
+      }
     }
 
     update()
-    if (!Number.isFinite(storedEndsAt) || storedEndsAt <= Date.now()) return
+    if (endsAt <= Date.now()) return
     const timer = window.setInterval(update, 250)
     return () => window.clearInterval(timer)
-  }, [storageKey])
+  }, [endsAt, storageKey])
 
   const startCooldown = useCallback(() => {
-    const endsAt = Date.now() + durationSeconds * 1000
-    window.localStorage.setItem(storageKey, String(endsAt))
+    const nextEndsAt = Date.now() + durationSeconds * 1000
+    try { window.localStorage.setItem(storageKey, String(nextEndsAt)) } catch { /* The in-memory cooldown still applies. */ }
+    setEndsAt(nextEndsAt)
     setRemainingSeconds(durationSeconds)
   }, [durationSeconds, storageKey])
 

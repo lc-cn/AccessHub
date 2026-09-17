@@ -3,12 +3,14 @@
 import { useState } from "react";
 import { Fingerprint, Mail, ShieldCheck } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
+import { useCodeSendCooldown } from "@/lib/use-code-send-cooldown";
 
 export default function ReauthenticatePage() {
   const [email, setEmail] = useState("");
   const [otp, setOtp] = useState("");
   const [pending, setPending] = useState("");
   const [message, setMessage] = useState("");
+  const otpCooldown = useCodeSendCooldown("sign-in");
   const destination = () => {
     const next = new URLSearchParams(window.location.search).get("next");
     return next?.startsWith("/") && !next.startsWith("//")
@@ -27,6 +29,7 @@ export default function ReauthenticatePage() {
     window.location.assign(destination());
   };
   const send = async () => {
+    if (otpCooldown.isCoolingDown) return;
     if (!email) return setMessage("请先输入账户邮箱。");
     setPending("send");
     setMessage("");
@@ -35,6 +38,7 @@ export default function ReauthenticatePage() {
       type: "sign-in",
     });
     setPending("");
+    if (!result.error) otpCooldown.startCooldown();
     setMessage(
       result.error
         ? "验证码发送失败，请稍后重试。"
@@ -104,11 +108,15 @@ export default function ReauthenticatePage() {
             />
             <button
               type="button"
-              disabled={pending !== ""}
+              disabled={pending !== "" || otpCooldown.isCoolingDown}
               onClick={() => void send()}
               className="rounded-xl border border-slate-200 px-4 text-xs font-medium text-slate-600 disabled:opacity-60"
             >
-              {pending === "send" ? "发送中…" : "发送验证码"}
+              {pending === "send"
+                ? "发送中…"
+                : otpCooldown.isCoolingDown
+                  ? `${otpCooldown.remainingSeconds} 秒后重发`
+                  : "发送验证码"}
             </button>
           </div>
           <button

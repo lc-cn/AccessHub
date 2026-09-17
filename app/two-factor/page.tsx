@@ -4,12 +4,14 @@ import { useState } from "react";
 import Link from "next/link";
 import { Fingerprint, KeyRound, Mail, ShieldCheck } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
+import { useCodeSendCooldown } from "@/lib/use-code-send-cooldown";
 
 export default function TwoFactorPage() {
   const [method, setMethod] = useState<"totp" | "otp" | "backup">("totp");
   const [code, setCode] = useState("");
   const [pending, setPending] = useState("");
   const [message, setMessage] = useState("");
+  const otpCooldown = useCodeSendCooldown("two-factor");
 
   const destination = () => {
     const next = new URLSearchParams(window.location.search).get("next");
@@ -24,10 +26,12 @@ export default function TwoFactorPage() {
     return target;
   };
   const sendEmailCode = async () => {
+    if (otpCooldown.isCoolingDown) return;
     setPending("send");
     setMessage("");
     const result = await authClient.twoFactor.sendOtp();
     setPending("");
+    if (!result.error) otpCooldown.startCooldown();
     setMessage(
       result.error
         ? "验证码发送失败，请重试。"
@@ -101,11 +105,15 @@ export default function TwoFactorPage() {
         </div>
         {method === "otp" && (
           <button
-            disabled={pending !== ""}
+            disabled={pending !== "" || otpCooldown.isCoolingDown}
             onClick={() => void sendEmailCode()}
             className="mt-4 w-full rounded-xl border border-slate-200 px-4 py-3 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
           >
-            {pending === "send" ? "正在发送…" : "发送邮箱验证码"}
+            {pending === "send"
+              ? "正在发送…"
+              : otpCooldown.isCoolingDown
+                ? `${otpCooldown.remainingSeconds} 秒后重发`
+                : "发送邮箱验证码"}
           </button>
         )}
         <form
