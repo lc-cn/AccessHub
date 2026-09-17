@@ -36,9 +36,12 @@ AccessHub 是面向 API 服务提供者的可自行部署的管理平台。管�
 ```bash
 curl https://your-accesshub.example/api/gateway/service-code/api-code \
   -H 'Authorization: Bearer YOUR_API_KEY'
+
+# 也可以将 API Key 作为 Query 参数传递
+curl 'https://your-accesshub.example/api/gateway/service-code/api-code?key=YOUR_API_KEY'
 ```
 
-实际 HTTP 方法与参数由管理员配置的接口决定。API Key 标识用户，服务访问权由用户当前权限决定。上游凭据保留在服务端，不交给调用方；网关不跟随上游重定向。
+实际 HTTP 方法与参数由管理员配置的接口决定。API Key 标识用户，服务访问权由用户当前权限决定。`key` 是 AccessHub 网关保留参数，不会转发给上游；上游凭据保留在服务端，不交给调用方。网关不跟随上游重定向。生产调用仍优先建议使用 Bearer Header，避免 URL 被浏览器历史、代理或访问日志记录。
 
 当前只有上游返回 **HTTP 200** 才结算配置的调用单位；网络失败、超时和其他状态不扣除配额。计划额度按付费计划、默认计划、Credits 的顺序回落，具体规则见 [领域模型](CONTEXT.md)。
 
