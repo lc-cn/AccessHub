@@ -28,7 +28,7 @@ export function WorkspaceShell({ route, user, isAdmin, initializing, loading, er
   return <div className="min-h-dvh bg-[#f3f6fb] text-[#172033]">
     <a href="#main-content" className="sr-only z-50 rounded-lg bg-white px-4 py-2 text-sm focus:not-sr-only focus:fixed focus:left-4 focus:top-4">跳到主要内容</a>
     <aside className="fixed inset-y-0 left-0 z-20 hidden w-[272px] border-r border-[#e3e9f3] bg-white px-5 py-6 lg:flex lg:flex-col">
-      <Brand/>
+      <Brand isAdmin={isAdmin}/>
       <nav className="mt-7 min-h-0 flex-1 space-y-6 overflow-y-auto pr-1" aria-label="主导航">
         {initializing ? <NavigationSkeleton/> : groups.map((group) => <div key={group.label}>
           <p className="mb-2 px-3 text-[10px] font-semibold tracking-[.14em] text-slate-300">{group.label.toUpperCase()}</p>
@@ -72,7 +72,7 @@ function NavLink({ item, route, onClick, detailed = false }: { item: WorkspaceNa
   </Link>
 }
 
-function Brand() { return <Link href="/dashboard" className="flex items-center gap-3 px-2"><span className="grid size-9 place-items-center rounded-xl bg-[#3157d5] text-white shadow-[0_8px_22px_rgba(49,87,213,.25)]"><Zap size={17} fill="currentColor"/></span><span><span className="block font-semibold tracking-tight">AccessHub</span><span className="block text-[10px] tracking-wide text-slate-400">ACCESS CONTROL</span></span></Link> }
+function Brand({ isAdmin }: { isAdmin: boolean }) { return <Link href={isAdmin ? '/admin' : '/dashboard'} className="flex items-center gap-3 px-2"><span className="grid size-9 place-items-center rounded-xl bg-[#3157d5] text-white shadow-[0_8px_22px_rgba(49,87,213,.25)]"><Zap size={17} fill="currentColor"/></span><span><span className="block font-semibold tracking-tight">AccessHub</span><span className="block text-[10px] tracking-wide text-slate-400">ACCESS CONTROL</span></span></Link> }
 function Avatar({ user }: { user: DashboardData['user'] }) { return <span className="grid size-9 shrink-0 place-items-center overflow-hidden rounded-xl bg-[#e7ebf3] text-xs font-semibold text-slate-600">{user?.image ? <img src={user.image} alt={`${user.name} 的头像`} className="size-full object-cover"/> : user?.name?.slice(0, 1) || '?'}</span> }
 function NavigationSkeleton() { return <div className="space-y-6">{[2, 3, 2].map((count, index) => <div key={index}><span className="mb-2 block h-2.5 w-16 animate-pulse rounded bg-slate-100"/><div className="space-y-1">{Array.from({ length: count }).map((_, item) => <span key={item} className="block h-10 animate-pulse rounded-xl bg-slate-50"/>)}</div></div>)}</div> }
 

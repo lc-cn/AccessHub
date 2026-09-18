@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useState } from 'react'
 import { AfdianMappings } from './afadian-mappings'
+import { AdminOverview } from './admin-overview'
 import { ApiKeyManagement } from './api-key-management'
 import { CommerceResources } from './commerce-resources'
 import { Orders } from './orders'
@@ -54,6 +55,7 @@ export function WorkspacePage({ route, resourceId }: Props) {
 function RouteContent({ route, resourceId, dashboard, loading, copied, refresh, signIn, copyId, router }: { route: WorkspaceRoute; resourceId?: string; dashboard: DashboardData | null; loading: boolean; copied: boolean; refresh: () => Promise<void>; signIn: () => Promise<void>; copyId: () => Promise<void>; router: ReturnType<typeof useRouter> }) {
   const plans = dashboard?.plans ?? []
   const skus: Sku[] = []
+  if (route === 'admin-overview') return <AdminOverview/>
   if (route === 'dashboard') return <Overview dashboard={dashboard} loading={loading} copied={copied} onCopyId={() => void copyId()} onNavigate={(view) => router.push(view === '兑换码' ? '/redeem-codes' : '/admin/plans')}/>
   if (route === 'api-keys') return <ApiKeyManagement/>
   if (route === 'redeem') return <RedeemCodes authenticated isAdmin={false} skus={skus} onChanged={refresh} onSignIn={signIn} mode="redeem"/>

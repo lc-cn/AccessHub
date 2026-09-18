@@ -19,7 +19,7 @@ import {
   Wrench,
 } from 'lucide-react'
 
-export type WorkspaceRoute = 'dashboard' | 'api-keys' | 'redeem' | 'catalog' | 'catalog-service' | 'catalog-api' | 'codes' | 'codes-new' | 'plans' | 'plans-new' | 'plans-edit' | 'skus' | 'skus-new' | 'skus-edit' | 'service-api-new' | 'service-api-edit' | 'services' | 'services-new' | 'services-edit' | 'permissions' | 'permissions-new' | 'permissions-edit' | 'usage' | 'subscriptions' | 'orders' | 'order-detail' | 'payments' | 'users' | 'operations' | 'logs' | 'afdian' | 'afdian-new' | 'afdian-edit' | 'afdian-orders' | 'afdian-order-detail' | 'afdian-events'
+export type WorkspaceRoute = 'admin-overview' | 'dashboard' | 'api-keys' | 'redeem' | 'catalog' | 'catalog-service' | 'catalog-api' | 'codes' | 'codes-new' | 'plans' | 'plans-new' | 'plans-edit' | 'skus' | 'skus-new' | 'skus-edit' | 'service-api-new' | 'service-api-edit' | 'services' | 'services-new' | 'services-edit' | 'permissions' | 'permissions-new' | 'permissions-edit' | 'usage' | 'subscriptions' | 'orders' | 'order-detail' | 'payments' | 'users' | 'operations' | 'logs' | 'afdian' | 'afdian-new' | 'afdian-edit' | 'afdian-orders' | 'afdian-order-detail' | 'afdian-events'
 
 export type WorkspaceNavItem = {
   label: string
@@ -36,6 +36,13 @@ export type WorkspaceNavGroup = {
 }
 
 export const workspaceNavGroups: WorkspaceNavGroup[] = [
+  {
+    label: '运营总览',
+    admin: true,
+    items: [
+      { label: '控制台', description: '业务、流量与待办', href: '/admin', active: ['admin-overview'], icon: LayoutDashboard },
+    ],
+  },
   {
     label: 'API 网关',
     admin: true,
@@ -94,6 +101,7 @@ export const workspaceNavGroups: WorkspaceNavGroup[] = [
 ]
 
 export const workspaceRouteMeta: Record<WorkspaceRoute, { eyebrow: string; title: string; description: string; admin?: boolean }> = {
+  'admin-overview': { eyebrow: '管理工作区', title: '运营总览', description: '集中查看 API 流量、客户增长、商业履约和需要人工处理的异常。', admin: true },
   dashboard: { eyebrow: '我的空间', title: '概览', description: '查看账户、访问权益与今天的 API 使用情况。' },
   'api-keys': { eyebrow: '我的空间 / 开发者', title: 'API Keys', description: '为服务端、脚本或 CI 创建和管理程序调用凭据。' },
   redeem: { eyebrow: '我的空间 / 权益', title: '兑换权益', description: '核销兑换码，权益将立即加入当前账户。' },

@@ -128,4 +128,36 @@ export type GatewayUsageUser = { userId: string; userName: string; userEmail: st
 export type GatewayUsageRecent = { id: string; userId: string; userName: string; serviceCode: string; apiCode: string; method: string; outcome: 'success' | 'rejected' | 'upstream_error'; responseStatus: number; upstreamStatus: number | null; configuredUsageUnits: number; chargedUsageUnits: number; durationMs: number; errorCode: string | null; createdAt: string }
 export type GatewayUsageReport = { days: number; since: string; summary: GatewayUsageSummary; daily: GatewayUsageDaily[]; services: GatewayUsageService[]; apis: GatewayUsageApi[]; users: GatewayUsageUser[]; recent: GatewayUsageRecent[] }
 
+export type AdminOverviewAttention = {
+  kind: 'delivery_unknown' | 'provider_event_failed' | 'dead_letter' | 'outbox_failed'
+  id: string
+  title: string
+  detail: string
+  occurredAt: string
+  href: string
+}
+
+export type AdminOverviewOrder = {
+  id: string
+  providerId: string | null
+  externalOrderId: string | null
+  externalOfferTitle: string
+  amount: string
+  currency: string
+  status: string
+  deliveryStatus: string
+  createdAt: string
+}
+
+export type AdminOverviewData = {
+  generatedAt: string
+  traffic: { requests24h: number; successes24h: number; activeUsers24h: number; chargedUnits24h: number; p95DurationMs24h: number }
+  customers: { total: number; new7d: number }
+  commerce: { activeSubscriptions: number; expiring7d: number; orders24h: number; fulfilledOrders24h: number }
+  catalog: { enabledServices: number; enabledApis: number }
+  operations: { unknownDeliveries: number; failedProviderEvents: number; pendingDeadLetters: number; failedOutbox: number; totalAttention: number }
+  attention: AdminOverviewAttention[]
+  recentOrders: AdminOverviewOrder[]
+}
+
 export type AdminData = { plans: AdminPlan[]; codes: RedeemCode[]; afdianMappings: AfdianMapping[]; orders: Order[]; skus: Sku[]; users: AdminUser[]; logs: ActivityLog[]; subscriptions: Subscription[]; payments: Payment[]; providerEvents: ProviderEvent[]; services: ApiService[]; permissions: Permission[]; workerBindings: WorkerServiceBinding[]; afadianWebhookConfigured: boolean; afadianMessengerConfigured?: boolean }
