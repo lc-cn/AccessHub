@@ -3,7 +3,7 @@ import { sendEmail } from './index.ts'
 export type SecurityCodePurpose = 'sign-in' | 'email-verification' | 'forget-password' | 'change-email' | 'mfa'
 
 const purposeCopy: Record<SecurityCodePurpose, { subject: string; title: string }> = {
-  'sign-in': { subject: 'AccessHub - 登录验证码', title: '登录 AccessHub' },
+  'sign-in': { subject: 'AccessHub - 身份验证码', title: '确认您的身份' },
   'email-verification': { subject: 'AccessHub - 邮箱验证码', title: '验证您的邮箱' },
   'forget-password': { subject: 'AccessHub - 重置密码验证码', title: '重置账户密码' },
   'change-email': { subject: 'AccessHub - 邮箱变更验证码', title: '确认邮箱变更' },
