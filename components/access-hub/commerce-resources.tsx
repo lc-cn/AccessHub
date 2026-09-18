@@ -1,7 +1,8 @@
 'use client'
 
+import Link from 'next/link'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { CircleUserRound, CreditCard, History, RefreshCw, Search, Webhook } from 'lucide-react'
+import { ArrowRight, CircleUserRound, CreditCard, History, RefreshCw, Search, Webhook } from 'lucide-react'
 import type { ActivityLog, AdminData, AdminUser, Payment, ProviderEvent, Subscription } from './types'
 import { requestJson } from '@/lib/http-client'
 import { useWorkspaceRefresh } from './workspace-data'
@@ -45,7 +46,7 @@ export function CommerceResources({ resource }: { resource: Resource }) {
 function ResourceRow({ resource, row, updating, onTransition }: { resource: Resource; row: Subscription | Payment | AdminUser | ActivityLog | ProviderEvent; updating: boolean; onTransition: (id: string, status: Subscription['status']) => Promise<void> }) {
   if (resource === 'subscriptions') { const item = row as Subscription; return <SubscriptionRow item={item} updating={updating} onTransition={onTransition}/> }
   if (resource === 'payments') { const item = row as Payment; return <Card title={`${item.currency} ${item.amount || '0'}`} code={item.externalPaymentId || item.id} badge={<Status value={item.status}/>} detail={`订单 ${item.orderId}`} time={formatDate(item.paidAt || item.createdAt)}/> }
-  if (resource === 'users') { const item = row as AdminUser; return <Card title={item.name || '未命名用户'} code={item.email} badge={<Status value={item.role}/>} detail={item.id} time={`注册于 ${formatDate(item.createdAt)}`}/> }
+  if (resource === 'users') { const item = row as AdminUser; return <Link href={`/admin/users/${encodeURIComponent(item.id)}`} className="group grid gap-3 rounded-[16px] bg-white px-5 py-4 transition hover:-translate-y-0.5 hover:shadow-[0_14px_34px_rgba(39,55,92,.07)] sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"><div className="min-w-0"><div className="flex items-center gap-2"><h3 className="truncate text-sm font-medium">{item.name || '未命名用户'}</h3><Status value={item.role}/></div><code className="mt-1 block truncate text-[10px] text-slate-400">{item.email}</code><p className="mt-2 truncate text-xs text-slate-500">{item.id}</p></div><span className="flex items-center gap-2 text-[11px] text-slate-400">注册于 {formatDate(item.createdAt)}<ArrowRight size={13} className="transition group-hover:translate-x-0.5 group-hover:text-[#3157d5]"/></span></Link> }
   if (resource === 'logs') { const item = row as ActivityLog; return <Card title={item.action} code={item.resourceId || item.id} badge={<Status value={item.resourceType}/>} detail={item.detail || '无补充信息'} time={formatDate(item.createdAt)}/> }
   const item = row as ProviderEvent
   return <Card title={item.type} code={item.externalEventId} badge={<Status value={item.status}/>} detail={item.error || `Provider: ${item.providerId}`} time={formatDate(item.processedAt || item.createdAt)}/>

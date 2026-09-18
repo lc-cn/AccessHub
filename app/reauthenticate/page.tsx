@@ -67,7 +67,7 @@ export default function ReauthenticatePage() {
           再次确认是你本人
         </h1>
         <p className="mt-2 text-sm leading-6 text-slate-500">
-          该操作会影响账户凭据。请使用 Passkey 或主要邮箱完成一次强验证。
+          该操作会影响账户安全、凭据或权益。请使用 Passkey 或主要邮箱完成一次强验证。
         </p>
         <button
           disabled={pending !== ""}

@@ -19,7 +19,7 @@ import {
   Wrench,
 } from 'lucide-react'
 
-export type WorkspaceRoute = 'admin-overview' | 'dashboard' | 'api-keys' | 'redeem' | 'catalog' | 'catalog-service' | 'catalog-api' | 'codes' | 'codes-new' | 'plans' | 'plans-new' | 'plans-edit' | 'skus' | 'skus-new' | 'skus-edit' | 'service-api-new' | 'service-api-edit' | 'services' | 'services-new' | 'services-edit' | 'permissions' | 'permissions-new' | 'permissions-edit' | 'usage' | 'subscriptions' | 'orders' | 'order-detail' | 'payments' | 'users' | 'operations' | 'logs' | 'afdian' | 'afdian-new' | 'afdian-edit' | 'afdian-orders' | 'afdian-order-detail' | 'afdian-events'
+export type WorkspaceRoute = 'admin-overview' | 'dashboard' | 'api-keys' | 'redeem' | 'catalog' | 'catalog-service' | 'catalog-api' | 'codes' | 'codes-new' | 'plans' | 'plans-new' | 'plans-edit' | 'skus' | 'skus-new' | 'skus-edit' | 'service-api-new' | 'service-api-edit' | 'services' | 'services-new' | 'services-edit' | 'permissions' | 'permissions-new' | 'permissions-edit' | 'usage' | 'subscriptions' | 'orders' | 'order-detail' | 'payments' | 'users' | 'user-detail' | 'operations' | 'logs' | 'afdian' | 'afdian-new' | 'afdian-edit' | 'afdian-orders' | 'afdian-order-detail' | 'afdian-events'
 
 export type WorkspaceNavItem = {
   label: string
@@ -78,7 +78,7 @@ export const workspaceNavGroups: WorkspaceNavGroup[] = [
       { label: '订阅', description: '订阅状态机', href: '/admin/subscriptions', active: ['subscriptions'], icon: Repeat2 },
       { label: '订单', description: '统一订单与履约', href: '/admin/orders', active: ['orders', 'order-detail'], icon: ReceiptText },
       { label: '支付', description: 'PSP 交易结果', href: '/admin/payments', active: ['payments'], icon: CreditCard },
-      { label: '用户', description: '账户与角色', href: '/admin/users', active: ['users'], icon: Users },
+      { label: '用户', description: '账户、权益与活动', href: '/admin/users', active: ['users', 'user-detail'], icon: Users },
     ],
   },
   {
@@ -130,6 +130,7 @@ export const workspaceRouteMeta: Record<WorkspaceRoute, { eyebrow: string; title
   'order-detail': { eyebrow: '商业中心 / 订单', title: '订单详情', description: '查看支付、SKU、交付和核销闭环。', admin: true },
   payments: { eyebrow: '商业中心 / 交易', title: '支付', description: '追踪各支付服务商的资金交易状态。', admin: true },
   users: { eyebrow: '商业中心 / 客户', title: '用户', description: '查看平台账户、身份和系统角色。', admin: true },
+  'user-detail': { eyebrow: '商业中心 / 用户', title: '用户详情', description: '查看账户身份、安全状态、权益、用量和交易活动，并执行受保护的人工补发。', admin: true },
   operations: { eyebrow: '系统 / 运维', title: '运行中心', description: '查看异步任务异常并安全执行人工恢复。', admin: true },
   logs: { eyebrow: '系统 / 审计', title: '活动日志', description: '审计平台内的重要业务操作。', admin: true },
   afdian: { eyebrow: '爱发电 / 商品', title: '商品映射', description: '连接爱发电方案或 SKU 与本地商品目录。', admin: true },

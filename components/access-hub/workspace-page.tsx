@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useState } from 'react'
 import { AfdianMappings } from './afadian-mappings'
 import { AdminOverview } from './admin-overview'
+import { AdminUserDetail } from './admin-user-detail'
 import { ApiKeyManagement } from './api-key-management'
 import { CommerceResources } from './commerce-resources'
 import { Orders } from './orders'
@@ -66,6 +67,7 @@ function RouteContent({ route, resourceId, dashboard, loading, copied, refresh, 
   if (route === 'services' || route === 'services-new' || route === 'services-edit' || route === 'service-api-new' || route === 'service-api-edit') return <Services mode={route === 'services' ? 'list' : route === 'services-new' ? 'new' : route === 'services-edit' ? 'edit' : route === 'service-api-new' ? 'api-new' : 'api-edit'} resourceId={resourceId}/>
   if (route === 'permissions' || route === 'permissions-new' || route === 'permissions-edit') return <Permissions mode={route === 'permissions' ? 'list' : route === 'permissions-new' ? 'new' : 'edit'} permissionId={resourceId}/>
   if (route === 'usage') return <UsageReport/>
+  if (route === 'user-detail') return <AdminUserDetail userId={resourceId || ''}/>
   if (route === 'subscriptions' || route === 'payments' || route === 'users' || route === 'logs' || route === 'afdian-events') return <CommerceResources resource={route}/>
   if (route === 'orders' || route === 'order-detail') return <Orders mode={route === 'orders' ? 'list' : 'detail'} orderId={resourceId}/>
   if (route === 'operations') return <Operations/>

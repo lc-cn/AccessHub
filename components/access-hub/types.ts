@@ -160,4 +160,17 @@ export type AdminOverviewData = {
   recentOrders: AdminOverviewOrder[]
 }
 
+export type AdminUserDetailData = {
+  user: { id: string; name: string; email: string; emailVerified: boolean; image: string | null; role: string; twoFactorEnabled: boolean; createdAt: string; updatedAt: string }
+  security: { identities: Array<{ id: string; provider: string; hasPassword: boolean; createdAt: string }>; passkeyCount: number; activeSessionCount: number; hasTotp: boolean }
+  summary: { creditsRemaining: number; requests30d: number; chargedUnits30d: number; successfulRequests30d: number; orderCount: number }
+  entitlements: Array<{ id: string; planId: string; planName: string; rank: number; source: string; startsAt: string; expiresAt: string | null; active: boolean }>
+  credits: Array<{ id: string; credits: number; remainingCredits: number; source: string; expiresAt: string | null; createdAt: string; active: boolean }>
+  apiKeys: Array<{ id: string; name: string; kind: string; prefix: string; expiresAt: string | null; lastUsedAt: string | null; revokedAt: string | null; createdAt: string }>
+  subscriptions: Array<{ id: string; planName: string; status: string; providerId: string | null; currentPeriodStart: string | null; currentPeriodEnd: string | null; createdAt: string }>
+  orders: Array<{ id: string; providerId: string | null; externalOrderId: string | null; title: string; amount: string; currency: string; status: string; deliveryStatus: string; createdAt: string }>
+  recentCalls: Array<{ id: string; serviceCode: string; apiCode: string; outcome: string; responseStatus: number; chargedUsageUnits: number; durationMs: number; createdAt: string }>
+  plans: Array<{ id: string; name: string; rank: number; isDefault: boolean }>
+}
+
 export type AdminData = { plans: AdminPlan[]; codes: RedeemCode[]; afdianMappings: AfdianMapping[]; orders: Order[]; skus: Sku[]; users: AdminUser[]; logs: ActivityLog[]; subscriptions: Subscription[]; payments: Payment[]; providerEvents: ProviderEvent[]; services: ApiService[]; permissions: Permission[]; workerBindings: WorkerServiceBinding[]; afadianWebhookConfigured: boolean; afadianMessengerConfigured?: boolean }
