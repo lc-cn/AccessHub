@@ -11,6 +11,7 @@ import { Permissions } from './permissions'
 import { Skus } from './skus'
 import { Services } from './services'
 import { ServiceCatalog } from './service-catalog'
+import { UsageReport } from './usage-report'
 import { SubscriptionPlanManagement } from './subscription-plans'
 import { Overview } from './overview'
 import { RedeemCodes } from './redeem-codes'
@@ -62,6 +63,7 @@ function RouteContent({ route, resourceId, dashboard, loading, copied, refresh, 
   if (route === 'skus' || route === 'skus-new' || route === 'skus-edit') return <Skus plans={plans} mode={route === 'skus' ? 'list' : route === 'skus-new' ? 'new' : 'edit'} skuId={resourceId}/>
   if (route === 'services' || route === 'services-new' || route === 'services-edit' || route === 'service-api-new' || route === 'service-api-edit') return <Services mode={route === 'services' ? 'list' : route === 'services-new' ? 'new' : route === 'services-edit' ? 'edit' : route === 'service-api-new' ? 'api-new' : 'api-edit'} resourceId={resourceId}/>
   if (route === 'permissions' || route === 'permissions-new' || route === 'permissions-edit') return <Permissions mode={route === 'permissions' ? 'list' : route === 'permissions-new' ? 'new' : 'edit'} permissionId={resourceId}/>
+  if (route === 'usage') return <UsageReport/>
   if (route === 'subscriptions' || route === 'payments' || route === 'users' || route === 'logs' || route === 'afdian-events') return <CommerceResources resource={route}/>
   if (route === 'orders' || route === 'order-detail') return <Orders mode={route === 'orders' ? 'list' : 'detail'} orderId={resourceId}/>
   if (route === 'operations') return <Operations/>

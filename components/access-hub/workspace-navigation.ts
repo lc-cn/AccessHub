@@ -1,6 +1,7 @@
 import type { LucideIcon } from 'lucide-react'
 import {
   Activity,
+  BarChart3,
   Boxes,
   CreditCard,
   HeartHandshake,
@@ -18,7 +19,7 @@ import {
   Wrench,
 } from 'lucide-react'
 
-export type WorkspaceRoute = 'dashboard' | 'api-keys' | 'redeem' | 'catalog' | 'catalog-service' | 'catalog-api' | 'codes' | 'codes-new' | 'plans' | 'plans-new' | 'plans-edit' | 'skus' | 'skus-new' | 'skus-edit' | 'service-api-new' | 'service-api-edit' | 'services' | 'services-new' | 'services-edit' | 'permissions' | 'permissions-new' | 'permissions-edit' | 'subscriptions' | 'orders' | 'order-detail' | 'payments' | 'users' | 'operations' | 'logs' | 'afdian' | 'afdian-new' | 'afdian-edit' | 'afdian-orders' | 'afdian-order-detail' | 'afdian-events'
+export type WorkspaceRoute = 'dashboard' | 'api-keys' | 'redeem' | 'catalog' | 'catalog-service' | 'catalog-api' | 'codes' | 'codes-new' | 'plans' | 'plans-new' | 'plans-edit' | 'skus' | 'skus-new' | 'skus-edit' | 'service-api-new' | 'service-api-edit' | 'services' | 'services-new' | 'services-edit' | 'permissions' | 'permissions-new' | 'permissions-edit' | 'usage' | 'subscriptions' | 'orders' | 'order-detail' | 'payments' | 'users' | 'operations' | 'logs' | 'afdian' | 'afdian-new' | 'afdian-edit' | 'afdian-orders' | 'afdian-order-detail' | 'afdian-events'
 
 export type WorkspaceNavItem = {
   label: string
@@ -41,6 +42,7 @@ export const workspaceNavGroups: WorkspaceNavGroup[] = [
     items: [
       { label: '服务', description: '上游服务与 API', href: '/admin/services', active: ['services', 'services-new', 'services-edit', 'service-api-new', 'service-api-edit'], icon: Waypoints },
       { label: '权限', description: '能力与计划授权', href: '/admin/permissions', active: ['permissions', 'permissions-new', 'permissions-edit'], icon: ShieldCheck },
+      { label: '用量统计', description: '调用趋势与用户分析', href: '/admin/usage', active: ['usage'], icon: BarChart3 },
     ],
   },
   {
@@ -112,6 +114,7 @@ export const workspaceRouteMeta: Record<WorkspaceRoute, { eyebrow: string; title
   'service-api-new': { eyebrow: 'API 网关 / 服务 / API', title: '新增 API', description: '定义请求方式、参数、超时与单次计费次数。', admin: true },
   'service-api-edit': { eyebrow: 'API 网关 / 服务 / API', title: '编辑 API', description: '调整端点路由、参数契约和计费规则。', admin: true },
   permissions: { eyebrow: 'API 网关 / 授权', title: '权限', description: '定义稳定能力，并由订阅计划向用户授予。', admin: true },
+  usage: { eyebrow: 'API 网关 / 分析', title: '用量统计', description: '查看用户是否正在调用 API，以及成功率、计费量、延迟和热门端点。', admin: true },
   'permissions-new': { eyebrow: 'API 网关 / 权限', title: '新增权限', description: '定义一项可被订阅计划授予的服务能力。', admin: true },
   'permissions-edit': { eyebrow: 'API 网关 / 权限', title: '编辑权限', description: '维护权限定义及其订阅计划授权关系。', admin: true },
   subscriptions: { eyebrow: '商业中心 / 生命周期', title: '订阅', description: '查看独立于支付服务商的订阅状态机。', admin: true },
