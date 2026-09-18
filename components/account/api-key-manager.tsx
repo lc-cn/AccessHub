@@ -7,6 +7,7 @@ import { EmptyState, Feedback, Panel, Status, dangerButton, formatDate, primaryB
 
 export type ApiKeyItem = { id: string; name: string; kind: 'default' | 'custom'; prefix: string; expiresAt: Date | string | null; lastUsedAt: Date | string | null; revokedAt: Date | string | null; createdAt: Date | string }
 type CreatedResponse = { apiKey: ApiKeyItem; token: string }
+const API_KEYS_REAUTHENTICATION_URL = '/reauthenticate?next=%2Fapi-keys'
 
 export function ApiKeyManager({ initialKeys }: { initialKeys: ApiKeyItem[] }) {
   const [keys, setKeys] = useState(initialKeys)
@@ -23,7 +24,7 @@ export function ApiKeyManager({ initialKeys }: { initialKeys: ApiKeyItem[] }) {
     try {
       const result = await requestJson<CreatedResponse>('/api/account/api-keys', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name, expiresInDays: Number(expiresInDays) }) })
       setKeys((current) => [result.apiKey, ...current]); setRevealed({ token: result.token, name: result.apiKey.name, copied: false }); setName('')
-    } catch (error) { const message = error instanceof Error ? error.message : '创建 API Key 失败，请稍后重试。'; if (message.includes('近期')) { window.location.assign('/reauthenticate?next=/account/api-keys'); return }; setFeedback({ tone: 'error', text: message }) }
+    } catch (error) { const message = error instanceof Error ? error.message : '创建 API Key 失败，请稍后重试。'; if (message.includes('近期')) { window.location.assign(API_KEYS_REAUTHENTICATION_URL); return }; setFeedback({ tone: 'error', text: message }) }
     finally { setPending('') }
   }
   const copy = async () => {
@@ -36,7 +37,7 @@ export function ApiKeyManager({ initialKeys }: { initialKeys: ApiKeyItem[] }) {
     try {
       const result = await requestJson<{ revokedAt: string }>(`/api/account/api-keys/${encodeURIComponent(id)}`, { method: 'DELETE' })
       setKeys((current) => current.map((item) => item.id === id ? { ...item, revokedAt: result.revokedAt } : item)); setConfirmRevoke(null); setFeedback({ tone: 'success', text: 'API Key 已撤销，后续请求将立即被拒绝。' })
-    } catch (error) { const message = error instanceof Error ? error.message : '撤销 API Key 失败，请稍后重试。'; if (message.includes('近期')) { window.location.assign('/reauthenticate?next=/account/api-keys'); return }; setFeedback({ tone: 'error', text: message }) }
+    } catch (error) { const message = error instanceof Error ? error.message : '撤销 API Key 失败，请稍后重试。'; if (message.includes('近期')) { window.location.assign(API_KEYS_REAUTHENTICATION_URL); return }; setFeedback({ tone: 'error', text: message }) }
     finally { setPending('') }
   }
   return <div className="space-y-6">
