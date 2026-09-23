@@ -25,7 +25,7 @@ async function gateway(request: Request, context: Context) {
     transport: apiServices.transport, bindingName: apiServices.bindingName,
     baseUrl: apiServices.baseUrl, authType: apiServices.authType, authConfigEncrypted: apiServices.authConfigEncrypted,
     requiredPermissionId: apiServices.requiredPermissionId,
-    apiId: serviceApis.id, path: serviceApis.path, method: serviceApis.method, parameters: serviceApis.parameters,
+    apiId: serviceApis.id, path: serviceApis.path, methods: serviceApis.methods, accept: serviceApis.accept, parameters: serviceApis.parameters,
     usageUnits: serviceApis.usageUnits, timeoutMs: serviceApis.timeoutMs,
   }).from(apiServices).innerJoin(serviceApis, eq(serviceApis.serviceId, apiServices.id)).where(and(eq(apiServices.code, serviceCode), eq(serviceApis.code, apiCode), eq(apiServices.enabled, true), eq(serviceApis.enabled, true))).limit(1)
   if (!target) return NextResponse.json({ error: 'api_not_found' }, { status: 404 })
@@ -49,9 +49,9 @@ async function gateway(request: Request, context: Context) {
   }
   const permissionSet = await resolveUserPermissions(db, principal.userId)
   if (!hasPermission(permissionSet, target.requiredPermissionId)) return respond(NextResponse.json({ error: 'permission_denied' }, { status: 403 }), { errorCode: 'permission_denied' })
-  if (request.method !== target.method) return respond(NextResponse.json({ error: 'method_not_allowed', expected: target.method }, { status: 405, headers: { allow: target.method } }), { errorCode: 'method_not_allowed' })
+  if (!target.methods.includes(request.method)) return respond(NextResponse.json({ error: 'method_not_allowed', expected: target.methods[0], allowed: target.methods }, { status: 405, headers: { allow: target.methods.join(', ') } }), { errorCode: 'method_not_allowed' })
 
-  const prepared = await prepareUpstreamRequest(request, target.baseUrl, target.path, target.parameters as ServiceParameter[], target.authType as ServiceAuthType, target.authConfigEncrypted)
+  const prepared = await prepareUpstreamRequest(request, target.baseUrl, target.path, target.parameters as ServiceParameter[], target.authType as ServiceAuthType, target.authConfigEncrypted, target.accept)
   if (!prepared.ok) return respond(NextResponse.json({ error: 'invalid_request', detail: prepared.error }, { status: 400 }), { errorCode: 'invalid_request' })
   const referenceId = `service_api:${target.apiId}`
   const preflight = await reserveApiUsage(principal.userId, target.usageUnits, referenceId, { commit: false })
@@ -62,7 +62,7 @@ async function gateway(request: Request, context: Context) {
       transport: target.transport as ServiceTransport,
       bindingName: target.bindingName,
       url: prepared.url,
-      method: target.method,
+      method: request.method,
       headers: prepared.headers,
       body: prepared.body,
       timeoutMs: target.timeoutMs,

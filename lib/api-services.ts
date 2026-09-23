@@ -20,6 +20,8 @@ export function parseServiceInput(body: Record<string, unknown>) {
   const code = String(body.code || '').trim().toLowerCase()
   const name = String(body.name || '').trim()
   const description = String(body.description || '').trim()
+  const introduce = String(body.introduce || '').trim()
+  if (introduce.length > 20000) return { ok: false, error: '服务介绍不能超过 20000 字' } as const
   const requestedTransport = body.transport == null ? 'http' : String(body.transport)
   if (!serviceTransportTypes.includes(requestedTransport as ServiceTransport)) return { ok: false, error: '服务连接方式无效' } as const
   const transport = requestedTransport as ServiceTransport
@@ -33,7 +35,7 @@ export function parseServiceInput(body: Record<string, unknown>) {
   if (!name) return { ok: false, error: '请输入服务名称' } as const
   if (transport === 'worker_binding' && (!bindingName || !/^[A-Z_][A-Z0-9_]{0,63}$/.test(bindingName))) return { ok: false, error: 'Worker Binding 名称需为 1–64 位大写字母、数字或下划线，且不能以数字开头' } as const
   if (!baseUrl.ok) return baseUrl
-  return { ok: true, value: { code, name, description, transport, bindingName, baseUrl: baseUrl.value, authType, requiredPermissionId, enabled: body.enabled !== false } } as const
+  return { ok: true, value: { code, name, description, introduce, transport, bindingName, baseUrl: baseUrl.value, authType, requiredPermissionId, enabled: body.enabled !== false } } as const
 }
 
 export function parseServiceApiInput(body: Record<string, unknown>) {
@@ -41,25 +43,38 @@ export function parseServiceApiInput(body: Record<string, unknown>) {
   const name = String(body.name || '').trim()
   const description = String(body.description || '').trim()
   const path = String(body.path || '').trim()
-  const method = String(body.method || '').toUpperCase() as ServiceApiMethod
+  const accept = String(body.accept || '').trim()
+  const requestBodyExample = String(body.requestBodyExample || '').trim()
+  const requestedMethods: unknown = body.methods ?? (body.method == null ? [] : [body.method])
+  if (!Array.isArray(requestedMethods) || requestedMethods.length === 0 || requestedMethods.length > serviceApiMethods.length ||
+      requestedMethods.some((item) => typeof item !== 'string' || !serviceApiMethods.includes(item.toUpperCase() as ServiceApiMethod))) {
+    return { ok: false, error: '请至少选择一种有效请求方式' } as const
+  }
+  const methods = serviceApiMethods.filter((method) => requestedMethods.some((item) => (item as string).toUpperCase() === method))
+  if (methods.length !== requestedMethods.length) return { ok: false, error: '请求方式不能重复' } as const
+  const method = methods[0]
   const usageUnits = Number(body.usageUnits)
   const timeoutMs = Number(body.timeoutMs ?? 30000)
   const parameters = parseParameters(body.parameters)
   if (!/^[a-z0-9][a-z0-9_-]{1,63}$/.test(code)) return { ok: false, error: 'API 编码需为 2–64 位小写字母、数字、横线或下划线' } as const
   if (!name) return { ok: false, error: '请输入 API 名称' } as const
+  if (accept.length > 255 || /[\r\n]/.test(accept)) return { ok: false, error: 'Accept 必须是单行且不超过 255 字符' } as const
+  if (requestBodyExample.length > 20000) return { ok: false, error: '请求体示例不能超过 20000 字' } as const
+  if (requestBodyExample) {
+    try { JSON.parse(requestBodyExample) } catch { return { ok: false, error: '请求体示例必须是有效 JSON' } as const }
+  }
   if (!path || !path.startsWith('/') || path.startsWith('//') || /^https?:/i.test(path)) return { ok: false, error: 'API 路径必须是以 / 开头的相对路径' } as const
-  if (!serviceApiMethods.includes(method)) return { ok: false, error: '请求方式无效' } as const
   if (!Number.isSafeInteger(usageUnits) || usageUnits < 0 || usageUnits > 10000) return { ok: false, error: '单次计费次数必须是 0–10000 的整数；0 表示免费调用' } as const
   if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1000 || timeoutMs > 120000) return { ok: false, error: '超时时间必须在 1000–120000 毫秒之间' } as const
   if (!parameters.ok) return parameters
   if (parameters.value.some((item) => item.location === 'query' && item.name.toLowerCase() === GATEWAY_API_KEY_QUERY_PARAM)) return { ok: false, error: `Query 参数 ${GATEWAY_API_KEY_QUERY_PARAM} 由 AccessHub 网关保留` } as const
-  if (method === 'GET' && parameters.value.some((item) => item.location === 'body')) return { ok: false, error: 'GET API 不能配置 Body 参数' } as const
+  if (methods.length === 1 && method === 'GET' && (parameters.value.some((item) => item.location === 'body') || requestBodyExample)) return { ok: false, error: '仅支持 GET 的 API 不能配置 Body 字段或请求体示例' } as const
   const pathParameters = parameters.value.filter((item) => item.location === 'path')
   if (pathParameters.some((item) => !item.required)) return { ok: false, error: 'Path 参数必须设为必填' } as const
   if (pathParameters.some((item) => !path.includes(`{${item.name}}`) && !path.includes(`:${item.name}`))) return { ok: false, error: '每个 Path 参数都必须在上游路径中有对应占位符' } as const
   const placeholders = [...path.matchAll(/\{([A-Za-z0-9_.-]+)\}|:([A-Za-z0-9_.-]+)/g)].map((match) => match[1] || match[2])
   if (placeholders.some((name) => !pathParameters.some((item) => item.name === name))) return { ok: false, error: '上游路径中的每个占位符都必须配置为 Path 参数' } as const
-  return { ok: true, value: { code, name, description, path, method, parameters: parameters.value, usageUnits, timeoutMs, enabled: body.enabled !== false } } as const
+  return { ok: true, value: { code, name, description, path, method, methods, accept, requestBodyExample, parameters: parameters.value, usageUnits, timeoutMs, enabled: body.enabled !== false } } as const
 }
 
 export function parseServiceAuthInput(authType: ServiceAuthType, body: Record<string, unknown>): Result<ServiceAuthConfig | null> {

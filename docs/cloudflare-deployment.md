@@ -50,7 +50,7 @@ On Cloudflare, a Mailjet SMTP configuration is sent through Mailjet Send API v3.
 
 ## 3. Apply the database migration
 
-Apply SQL files through `drizzle/0021_gateway_request_analytics.sql` to the existing PostgreSQL database before deploying. Migration `0020` renames existing OAuth account identities to the canonical `profilehub` provider, while `0021` starts the privacy-minimized API usage report ledger. Audit and stage the `0018` integrity constraints according to [database-integrity.md](database-integrity.md); it intentionally is not part of an unattended deploy. Existing services are retained as `http` transports, and existing services remain open to all authenticated users until a required permission is selected.
+Apply SQL files through `drizzle/0023_service_api_contract.sql` to the existing PostgreSQL database before deploying. Migration `0020` renames existing OAuth account identities to the canonical `profilehub` provider, while `0021` starts the privacy-minimized API usage report ledger. Audit and stage the `0018` integrity constraints according to [database-integrity.md](database-integrity.md); it intentionally is not part of an unattended deploy. Existing services are retained as `http` transports, and existing services remain open to all authenticated users until a required permission is selected.
 
 The first preview can use `DATABASE_URL` directly. For production, create a Hyperdrive configuration for the same database in the Cloudflare dashboard, uncomment the `HYPERDRIVE` block in `wrangler.jsonc`, and insert its configuration ID. AccessHub automatically prefers `HYPERDRIVE.connectionString` when the binding exists and falls back to `DATABASE_URL` otherwise.
 
@@ -186,3 +186,8 @@ After preview acceptance:
 5. Move DNS traffic, monitor Worker logs and PostgreSQL connections, then retire the Vercel deployment only after a rollback window.
 
 Production CI/CD and incident handling are documented in [operations-runbook.md](operations-runbook.md). The application still includes Vercel Analytics for migration compatibility. It is not part of the Cloudflare transport path; replace it with Cloudflare Web Analytics after cutover if production analytics are required.
+
+
+`0022_service_api_methods.sql` 将旧 API 的单个 `method` 回填到新 `methods` 数组。部署新代码前先执行此迁移；同一个 API 编码与网关路径可以配置多个 HTTP 方法，未配置的方法仍由网关返回 405，并在 `Allow` 响应头列出可用方法。配置的路径、参数、单次计费和上游鉴权对这些方法共用；Body 参数只在非 GET 请求中校验和转发。
+
+`0023_service_api_contract.sql` adds optional service Markdown introductions and API Accept / JSON request-body examples. Apply it before deploying code that reads these fields.

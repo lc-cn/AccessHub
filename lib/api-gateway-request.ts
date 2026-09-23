@@ -1,14 +1,14 @@
 import { applyServiceQueryAuth, joinServiceUrl, serviceAuthHeaders, type ServiceAuthType, type ServiceParameter } from './api-services.ts'
 import { GATEWAY_API_KEY_QUERY_PARAM } from './gateway-auth.ts'
 
-export async function prepareUpstreamRequest(request: Request, baseUrl: string, path: string, parameters: ServiceParameter[], authType: ServiceAuthType, encryptedAuth: string | null) {
+export async function prepareUpstreamRequest(request: Request, baseUrl: string, path: string, parameters: ServiceParameter[], authType: ServiceAuthType, encryptedAuth: string | null, configuredAccept = '') {
   try {
     const incoming = new URL(request.url)
     const target = joinServiceUrl(baseUrl, path)
     const outboundHeaders = serviceAuthHeaders(authType, encryptedAuth)
     applyServiceQueryAuth(target, authType, encryptedAuth)
     const contentType = request.headers.get('content-type')
-    const accept = request.headers.get('accept')
+    const accept = configuredAccept || request.headers.get('accept')
     if (contentType) outboundHeaders.set('content-type', contentType)
     if (accept) outboundHeaders.set('accept', accept)
     let jsonBody: Record<string, unknown> | null = null
@@ -18,6 +18,7 @@ export async function prepareUpstreamRequest(request: Request, baseUrl: string, 
       if (!jsonBody || Array.isArray(jsonBody)) return { ok: false, error: '请求 Body 必须是 JSON 对象' } as const
     }
     for (const parameter of parameters) {
+      if (parameter.location === 'body' && request.method === 'GET') continue
       let raw: unknown
       if (parameter.location === 'body') raw = jsonBody?.[parameter.name]
       else if (parameter.location === 'header') raw = request.headers.get(parameter.name)

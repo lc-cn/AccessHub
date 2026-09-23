@@ -11,11 +11,15 @@ type ServiceCatalogRow = {
   serviceCode: string
   serviceName: string
   serviceDescription: string
+  serviceIntroduce: string
   requiredPermissionId: string | null
   apiCode: string
   apiName: string
   apiDescription: string
+  apiAccept: string
+  apiRequestBodyExample: string
   method: string
+  methods: string[]
   parameters: unknown[]
   usageUnits: number
 }
@@ -27,11 +31,15 @@ function isServiceCatalog(value: unknown): value is ServiceCatalogRow[] {
     return typeof item.serviceCode === 'string'
       && typeof item.serviceName === 'string'
       && typeof item.serviceDescription === 'string'
+      && typeof item.serviceIntroduce === 'string'
       && (item.requiredPermissionId === null || typeof item.requiredPermissionId === 'string')
       && typeof item.apiCode === 'string'
       && typeof item.apiName === 'string'
       && typeof item.apiDescription === 'string'
+      && typeof item.apiAccept === 'string'
+      && typeof item.apiRequestBodyExample === 'string'
       && typeof item.method === 'string'
+      && Array.isArray(item.methods) && item.methods.length > 0 && item.methods.every((method) => typeof method === 'string')
       && Array.isArray(item.parameters)
       && typeof item.usageUnits === 'number'
   })
@@ -46,10 +54,10 @@ export async function GET() {
       key: readModelKeys.serviceCatalog,
       validate: isServiceCatalog,
       load: () => withRequestDatabase((database) => database.select({
-        serviceCode: apiServices.code, serviceName: apiServices.name, serviceDescription: apiServices.description,
+        serviceCode: apiServices.code, serviceName: apiServices.name, serviceDescription: apiServices.description, serviceIntroduce: apiServices.introduce,
         requiredPermissionId: apiServices.requiredPermissionId,
-        apiCode: serviceApis.code, apiName: serviceApis.name, apiDescription: serviceApis.description,
-        method: serviceApis.method, parameters: serviceApis.parameters, usageUnits: serviceApis.usageUnits,
+        apiCode: serviceApis.code, apiName: serviceApis.name, apiDescription: serviceApis.description, apiAccept: serviceApis.accept, apiRequestBodyExample: serviceApis.requestBodyExample,
+        method: serviceApis.method, methods: serviceApis.methods, parameters: serviceApis.parameters, usageUnits: serviceApis.usageUnits,
       }).from(apiServices).innerJoin(serviceApis, eq(serviceApis.serviceId, apiServices.id))
         .where(and(eq(apiServices.enabled, true), eq(serviceApis.enabled, true)))
         .orderBy(asc(apiServices.name), asc(serviceApis.name))),
@@ -58,7 +66,7 @@ export async function GET() {
   const rows = candidates.filter((row) => hasPermission(permissionSet, row.requiredPermissionId))
   const services = Array.from(new Set(rows.map((row) => row.serviceCode))).map((code) => {
     const matching = rows.filter((row) => row.serviceCode === code)
-    return { code, name: matching[0]?.serviceName, description: matching[0]?.serviceDescription, apis: matching.map((row) => ({ code: row.apiCode, name: row.apiName, description: row.apiDescription, method: row.method, path: `/api/gateway/${code}/${row.apiCode}`, parameters: row.parameters, usageUnits: row.usageUnits })) }
+    return { code, name: matching[0]?.serviceName, description: matching[0]?.serviceDescription, introduce: matching[0]?.serviceIntroduce, apis: matching.map((row) => ({ code: row.apiCode, name: row.apiName, description: row.apiDescription, accept: row.apiAccept, requestBodyExample: row.apiRequestBodyExample, method: row.method, methods: row.methods, path: `/api/gateway/${code}/${row.apiCode}`, parameters: row.parameters, usageUnits: row.usageUnits })) }
   })
   return NextResponse.json({ services })
 }

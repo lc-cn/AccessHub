@@ -63,3 +63,20 @@ test('rejects a missing required parameter before reserving usage', async () => 
   const result = await prepareUpstreamRequest(request, 'https://upstream.example', '/users/{id}/chat', parameters, 'none', null)
   assert.deepEqual(result, { ok: false, error: '缺少必填参数：id' })
 })
+
+test('GET on a multi-method API ignores Body parameters required by POST', async () => {
+  const request = new Request('https://access.example/api/gateway/demo/chat?id=user-1', { method: 'GET' })
+  const result = await prepareUpstreamRequest(request, 'https://upstream.example', '/users/{id}/chat', parameters, 'none', null)
+  assert.equal(result.ok, true)
+  if (result.ok) {
+    assert.equal(result.url.toString(), 'https://upstream.example/users/user-1/chat')
+    assert.equal(result.body, undefined)
+  }
+})
+
+test('configured Accept overrides the caller header on upstream requests', async () => {
+  const request = new Request('https://gateway.example/api/gateway/test/chat', { headers: { accept: 'text/plain' } })
+  const result = await prepareUpstreamRequest(request, 'https://upstream.example', '/chat', [], 'none', null, 'application/json')
+  assert.equal(result.ok, true)
+  if (result.ok) assert.equal(result.headers.get('accept'), 'application/json')
+})

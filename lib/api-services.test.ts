@@ -31,6 +31,23 @@ test('validates an endpoint and its request parameters', () => {
   assert.deepEqual(parseServiceApiInput({ code: 'reserved', name: 'Reserved', path: '/reserved', method: 'GET', usageUnits: 1, parameters: [{ name: 'KEY', location: 'query', dataType: 'string' }] }), { ok: false, error: 'Query 参数 key 由 AccessHub 网关保留' })
 })
 
+test('one API accepts multiple distinct methods while preserving the old single-method input', () => {
+  const input = { code: 'record', name: 'Records', path: '/records', usageUnits: 2, parameters: [{ name: 'value', location: 'body', dataType: 'string', required: true }] }
+  const multi = parseServiceApiInput({ ...input, methods: ['patch', 'get', 'post'] })
+  assert.equal(multi.ok, true)
+  if (multi.ok) {
+    assert.deepEqual(multi.value.methods, ['GET', 'POST', 'PATCH'])
+    assert.equal(multi.value.method, 'GET')
+  }
+  const legacy = parseServiceApiInput({ ...input, method: 'POST' })
+  assert.equal(legacy.ok, true)
+  if (legacy.ok) assert.deepEqual(legacy.value.methods, ['POST'])
+  assert.equal(parseServiceApiInput({ ...input, methods: ['GET', 'GET'] }).ok, false)
+  assert.equal(parseServiceApiInput({ ...input, methods: [] }).ok, false)
+  assert.equal(parseServiceApiInput({ ...input, methods: ['GET', 'TRACE'] }).ok, false)
+  assert.equal(parseServiceApiInput({ ...input, methods: ['GET'] }).ok, false)
+})
+
 test('encrypts service credentials and materializes auth headers', () => {
   const original = process.env.SERVICE_CREDENTIALS_KEY
   process.env.SERVICE_CREDENTIALS_KEY = 'test-only-service-credential-key-32-bytes'
@@ -81,4 +98,17 @@ test('presents editable auth metadata without exposing secrets', () => {
     if (original == null) delete process.env.SERVICE_CREDENTIALS_KEY
     else process.env.SERVICE_CREDENTIALS_KEY = original
   }
+})
+
+test('optional service introduction and API request metadata are validated', () => {
+  const service = parseServiceInput({ code: 'example', name: 'Example', baseUrl: 'https://api.example.com', introduce: '## Hello\n\nA service.' })
+  assert.equal(service.ok, true)
+  if (service.ok) assert.equal(service.value.introduce, '## Hello\n\nA service.')
+  const input = { code: 'chat', name: 'Chat', path: '/chat', methods: ['POST'], usageUnits: 1, parameters: [] }
+  const api = parseServiceApiInput({ ...input, accept: 'application/json', requestBodyExample: '{"message":"hello"}' })
+  assert.equal(api.ok, true)
+  if (api.ok) assert.equal(api.value.accept, 'application/json')
+  assert.equal(parseServiceApiInput({ ...input, requestBodyExample: '{broken' }).ok, false)
+  assert.equal(parseServiceApiInput({ ...input, accept: 'application/json\r\nx-injected: yes' }).ok, false)
+  assert.equal(parseServiceApiInput({ ...input, methods: ['GET'], requestBodyExample: '{}' }).ok, false)
 })
