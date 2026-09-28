@@ -1,0 +1,19 @@
+docs/oracle-deployment.md
+  s_d81892a3df5609::t_910638df3e9f50 59-63
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "eedaa45fe770dc37ea581fe441d8425ddee0c532",
+  "prompts": {},
+  "sessions": {
+    "s_d81892a3df5609": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0e60f-7492-7333-aeb7-878d1de4df90",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
