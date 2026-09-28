@@ -25,7 +25,7 @@
     "required": ["COMMERCE_INTERNAL_SECRET"]
   },
   "services": [
-    { "binding": "ACCESSHUB", "service": "accesshub" }
+    { "binding": "ACCESSHUB", "service": "accesshub-edge" }
   ],
   "queues": {
     "consumers": [

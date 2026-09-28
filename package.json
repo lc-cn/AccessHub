@@ -19,15 +19,17 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "build:oracle": "next build --webpack",
     "start": "next start",
-    "test": "node --experimental-strip-types --test lib/*.test.ts lib/**/*.test.ts workers/commerce/*.test.ts",
+    "test": "node --experimental-strip-types --test lib/*.test.ts lib/**/*.test.ts workers/commerce/*.test.ts workers/edge/*.test.ts",
     "typecheck": "next typegen && tsc --noEmit --incremental false && vinext build && tsc --noEmit -p workers/commerce/tsconfig.json",
     "dev:vinext": "vinext dev --port 3001",
     "build:vinext": "vinext build",
     "start:vinext": "wrangler dev --config dist/server/wrangler.json",
     "deploy:vinext": "vinext-cloudflare deploy --config dist/server/wrangler.json",
     "types:commerce": "wrangler types --config workers/commerce/wrangler.jsonc --env-interface CommerceWorkerEnv workers/commerce/worker-configuration.d.ts",
-    "deploy:commerce": "wrangler deploy --config workers/commerce/wrangler.jsonc"
+    "deploy:commerce": "wrangler deploy --config workers/commerce/wrangler.jsonc",
+    "deploy:edge": "wrangler deploy --config workers/edge/wrangler.jsonc"
   },
   "dependencies": {
     "@base-ui/react": "^1.5.0",

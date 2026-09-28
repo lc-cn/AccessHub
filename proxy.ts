@@ -3,9 +3,12 @@ import { NextResponse } from 'next/server'
 import { getSessionCookie } from 'better-auth/cookies'
 
 export function proxy(request: NextRequest) {
-  if (request.nextUrl.hostname === 'www.l2cl.link') {
+  const requestHost = request.headers.get('host')?.split(':', 1)[0]?.toLowerCase()
+  if (requestHost === 'www.l2cl.link') {
     const canonical = request.nextUrl.clone()
+    canonical.protocol = 'https:'
     canonical.hostname = 'l2cl.link'
+    canonical.port = ''
     return NextResponse.redirect(canonical, 308)
   }
 

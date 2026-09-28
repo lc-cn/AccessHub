@@ -1,0 +1,21 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "accesshub-edge",
+  "main": "index.ts",
+  "compatibility_date": "2026-09-17",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "observability": { "enabled": true, "redact_query_string": true },
+  "secrets": {
+    "required": ["EDGE_BRIDGE_SECRET", "COMMERCE_INTERNAL_SECRET", "ORIGIN_URL"]
+  },
+  "services": [
+    { "binding": "QQSIGN", "service": "qsign" },
+    { "binding": "PROFILEHUB_EGRESS", "service": "accesshub-commerce" }
+  ],
+  "queues": {
+    "producers": [
+      { "binding": "COMMERCE_EVENTS", "queue": "accesshub-commerce-events" }
+    ]
+  }
+}
