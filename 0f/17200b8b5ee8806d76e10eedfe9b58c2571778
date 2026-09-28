@@ -1,0 +1,32 @@
+lib/platform-bindings.ts
+  s_d81892a3df5609::t_588e67fd6ee2fb 44-66
+lib/platform-bindings.test.ts
+  s_d81892a3df5609::t_9366911f94024f 6-31
+docs/oracle-deployment.md
+  s_d81892a3df5609::t_9344b809a6409a 6,14-15,19-42
+  s_a467b02185c88e::t_4c46f81dd67153 43
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "0f17200b8b5ee8806d76e10eedfe9b58c2571778",
+  "prompts": {},
+  "sessions": {
+    "s_a467b02185c88e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0319c-34d0-7a61-a360-f3203f30d70a",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_d81892a3df5609": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0e60f-7492-7333-aeb7-878d1de4df90",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
