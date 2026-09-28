@@ -3,6 +3,32 @@ import test from 'node:test'
 import { getCommerceQueue, getServiceBinding } from './platform-bindings.ts'
 import { handleEdgeRequest, type EdgeEnv } from '../workers/edge/index.ts'
 
+test('QQSIGN private origin bypasses the edge bridge and preserves request details', async () => {
+  const previousPrivateUrl = process.env.QQSIGN_PRIVATE_URL
+  const originalFetch = globalThis.fetch
+  process.env.QQSIGN_PRIVATE_URL = 'http://10.0.0.36:9981'
+  const requests: Request[] = []
+  globalThis.fetch = async (input, init) => {
+    requests.push(new Request(input, init))
+    return new Response('{"code":0}', { status: 200 })
+  }
+  try {
+    const binding = getServiceBinding('QQSIGN')
+    assert.ok(binding)
+    const response = await binding.fetch(new Request('https://ts.internal/sign?uin=123&key=secret', {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: '{"cmd":"test"}',
+    }))
+    assert.equal(response.status, 200)
+    assert.equal(requests[0].url, 'http://10.0.0.36:9981/sign?uin=123&key=secret')
+    assert.equal(await requests[0].text(), '{"cmd":"test"}')
+    await assert.rejects(() => binding.fetch(new Request('https://evil.example/sign')), /Invalid QQSIGN/)
+  } finally {
+    globalThis.fetch = originalFetch
+    if (previousPrivateUrl === undefined) delete process.env.QQSIGN_PRIVATE_URL
+    else process.env.QQSIGN_PRIVATE_URL = previousPrivateUrl
+  }
+})
+
 test('Node adapter carries binding and commerce messages through the edge bridge', async () => {
   const previousUrl = process.env.EDGE_BRIDGE_URL
   const previousSecret = process.env.EDGE_BRIDGE_SECRET

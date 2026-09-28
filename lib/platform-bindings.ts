@@ -41,6 +41,29 @@ async function bridgePost(path: string, payload: unknown): Promise<Response> {
 }
 
 export function getServiceBinding(name: string): ServiceBinding | null {
+  if (name === 'QQSIGN' && process.env.QQSIGN_PRIVATE_URL) {
+    const origin = new URL(process.env.QQSIGN_PRIVATE_URL)
+    if (origin.protocol !== 'http:' || origin.username || origin.password || origin.search || origin.hash || origin.pathname !== '/') {
+      throw new Error('QQSIGN_PRIVATE_URL must be an HTTP origin')
+    }
+    return {
+      async fetch(request) {
+        const source = new URL(request.url)
+        if (source.protocol !== 'https:' || !['ts.internal', 'qsign.internal'].includes(source.hostname)) {
+          throw new Error('Invalid QQSIGN binding request origin')
+        }
+        const body = request.method === 'GET' || request.method === 'HEAD' ? null : Buffer.from(await request.arrayBuffer())
+        if (body && body.length > MAX_BINDING_BODY_BYTES) throw new Error('Worker Binding request body is too large')
+        const target = new URL(source.pathname + source.search, origin)
+        return fetch(target, {
+          method: request.method,
+          headers: request.headers,
+          body,
+          redirect: 'manual',
+        })
+      },
+    }
+  }
   if (!BINDINGS.has(name) || !bridgeConfig()) return null
   return {
     async fetch(request) {

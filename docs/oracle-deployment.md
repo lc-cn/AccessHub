@@ -3,7 +3,7 @@
 The production Web application runs as a Node.js standalone Next.js process on
 the Caddy ingress host. Caddy terminates HTTPS and proxies to a loopback-only
 Node port. Cloudflare remains the DNS/CDN provider. The `accesshub-edge` Worker
-is a small authenticated bridge for the QQSIGN and ProfileHub Service Bindings
+is a small authenticated bridge for the ProfileHub Service Binding
 and the Commerce Queue. `accesshub-commerce` still consumes the queue and runs
 Workflows; its `ACCESSHUB` binding points to `accesshub-edge`, which forwards
 only the internal commerce command route to the Node origin.
@@ -11,9 +11,35 @@ only the internal commerce command route to the Node origin.
 ```text
 Browser -> Cloudflare DNS/CDN -> Caddy -> 127.0.0.1:3002 -> Next.js + PostgreSQL
                                             |
-                                            +-> accesshub-edge (QQSIGN, ProfileHub, Queue)
+                                            +-> 10.6.208.136:9981 (QQSign)
+                                            +-> accesshub-edge (ProfileHub, Queue)
 accesshub-commerce -> accesshub-edge -> HTTPS origin -> Caddy -> Next.js command route
 ```
+
+## Current two-host layout
+
+- `161.118.242.232` (`10.0.0.230`, ZeroTier `10.6.208.209`): AccessHub on
+  `127.0.0.1:3002`, Zhin on `127.0.0.1:8068`, and Caddy HTTPS ingress. The
+  Caddy Proxy Manager UI and Beszel monitoring are disabled. Caddy itself is
+  required for the public HTTPS sites. The active Caddy JSON is backed up at
+  `/etc/caddy/accesshub-before-service-prune.json` and survives a
+  `caddy-api.service` restart through Caddy's autosave.
+- `213.35.99.41` (`10.0.0.36`, ZeroTier `10.6.208.136`): OneBots on
+  `127.0.0.1:6727`, exposed to Caddy over the OCI private network, and QQSign
+  on `10.6.208.136:9981`. The host firewall allows port 9981 only from
+  `10.6.208.209`. Zhin, Nexterm and Beszel are disabled here; their data is
+  retained for rollback.
+- AccessHub sets `QQSIGN_PRIVATE_URL=http://10.6.208.136:9981` in its protected
+  environment file. The Node adapter maps the existing QQSIGN binding request
+  to this private origin, so the service configuration and gateway credentials
+  stay unchanged. Removing this environment variable and restarting
+  `accesshub-web` restores the `accesshub-edge` QQSIGN path.
+
+The native QQSign process keeps signing sessions in memory. A restart clears
+them, so clients that depend on prior registration may need to register again.
+The `qsign.zhin.dev` public Worker and its Durable Object data remain in place;
+this private routing change does not migrate public Worker clients or state.
+Do not delete that Worker as part of a Web rollback.
 
 ## Release order
 
