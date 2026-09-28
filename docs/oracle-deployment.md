@@ -56,12 +56,11 @@ accesshub-commerce -> accesshub-edge -> HTTPS origin -> Caddy -> Next.js command
    for rollback until authenticated production smoke checks pass.
 
 The first apex certificate was issued with Certbot's manual DNS-01 challenge
-and copied to `/var/lib/caddy/accesshub-tls/` (owner `caddy`, mode `0600`).
-Caddy's `automatic_https.ignore_loaded_certificates` is enabled so it can
-obtain and renew its own certificate after the DNS cutover. Confirm a Caddy
-managed certificate exists under its certificate storage before relying on
-automatic renewal. The manually issued certificate expires 2026-12-27 and
-requires manual renewal if Caddy has not obtained its own certificate by then.
+to prevent a cutover outage. After DNS cutover, Caddy obtained its own
+certificate through HTTP-01. The temporary manual certificate loader and DNS
+challenge record were removed; Caddy now manages renewal with its default
+automatic HTTPS behavior. Verify the managed certificate under Caddy's
+certificate storage and test HTTPS after a proxy restart.
 
 The bridge accepts only explicitly listed bindings and valid Commerce Queue
 messages. Calls from Node require `EDGE_BRIDGE_SECRET`; internal Commerce
