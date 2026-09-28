@@ -1,0 +1,49 @@
+lib/platform-bindings.test.ts
+  s_d81892a3df5609::t_2ded8c282b7eff 1-3,5-31,60-67
+  s_d81892a3df5609::t_c801a700a94297 4,32-59
+docs/oracle-deployment.md
+  s_d81892a3df5609::t_4af2e087dfc040 25,29-32,50-64
+  s_d81892a3df5609::t_50a0ca26e5fd42 20,27-28,33,40-41,45
+  s_d81892a3df5609::t_8d49a0a3ad728f 1-19,21-24,26,34-39,42-44,46-49,65-114
+workers/edge/index.ts
+  s_d81892a3df5609::t_4821ab0b2b825d 51
+  s_d81892a3df5609::t_22fc1419df03ea 15,83-88
+  s_d81892a3df5609::t_15a214c2935414 92-94
+  s_d81892a3df5609::t_8ea98998758935 1-14,16-39,41-42,44-46,48-49,52-82,89-91
+  s_d81892a3df5609::t_8bdc8aed50e882 40,43,47,50,95
+workers/edge/wrangler.jsonc
+  s_d81892a3df5609::t_8ea98998758935 1-21
+proxy.ts
+  s_d81892a3df5609::t_0a3c69b5fd1aae 6-7,9,11
+lib/platform-bindings.ts
+  s_d81892a3df5609::t_55b6da9d86877b 3,11,13-56,68-75
+  s_d81892a3df5609::t_22fc1419df03ea 12
+package.json
+  s_d81892a3df5609::t_faf1ed2e47950c 22
+  s_d81892a3df5609::t_2ded8c282b7eff 24
+  s_d81892a3df5609::t_c354e34805ff17 31-32
+next.config.mjs
+  s_d81892a3df5609::t_faf1ed2e47950c 3
+workers/edge/index.test.ts
+  s_d81892a3df5609::t_65ae254cffc796 3,82-96
+  s_d81892a3df5609::t_01335e6ec0055e 70,72,81
+  s_d81892a3df5609::t_2ded8c282b7eff 1-2,4-69,71,73-80,97
+workers/commerce/wrangler.jsonc
+  s_d81892a3df5609::t_faf1ed2e47950c 28
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "3b8cad344f6dd987e44697d56675a8d7a479d080",
+  "prompts": {},
+  "sessions": {
+    "s_d81892a3df5609": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0e60f-7492-7333-aeb7-878d1de4df90",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
